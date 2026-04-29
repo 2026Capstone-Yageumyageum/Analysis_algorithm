@@ -49,6 +49,17 @@
 Analysis_algorithm/
   README.md
   AGENTS.md
+  requirements.txt
+  scripts/
+    run_pair_experiment.py
+  src/
+    analysis_algorithm/
+      pose/
+      normalization/
+      features/
+      phase/
+      alignment/
+      visualization/
   docs/
     experiment_protocol.md
     experiment_history.md
@@ -59,6 +70,42 @@ Analysis_algorithm/
   results/
     summary.csv
 ```
+
+## 코드 실행
+
+현재 코드의 목적은 최종 유사도 점수를 확정하는 것이 아니라, 두 영상에서 다음 산출물을 만드는 것입니다.
+
+- MediaPipe 기반 2D 관절 좌표
+- 골반 중심, 몸통 기준, body-scale 단위의 정규화 feature
+- 투구 구간 대표 프레임
+- 구간별 동적 시간 정렬(DTW) 결과
+- 정규화 스켈레톤 오버레이 영상
+
+MediaPipe 호환성을 위해 Python 3.11 사용을 권장합니다. 현재 검증 기준은 `mediapipe==0.10.21`입니다.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+기본 실험 쌍으로 실행할 때는 다음 명령을 사용합니다.
+
+```bash
+python scripts/run_pair_experiment.py
+```
+
+키와 투구손을 명시하려면 다음처럼 실행합니다.
+
+```bash
+python scripts/run_pair_experiment.py \
+  --pro-height-cm 191 \
+  --user-height-cm 175 \
+  --pro-handedness left \
+  --user-handedness right
+```
+
+실행 결과는 `outputs/expN`에 생성되며, 이 폴더는 커밋하지 않습니다.
 
 ## 작업 규칙
 

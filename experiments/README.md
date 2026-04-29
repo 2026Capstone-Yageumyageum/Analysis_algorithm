@@ -7,12 +7,25 @@
 ## 폴더명 규칙
 
 ```text
-exp001_pose_model_selection/
-exp002_spatial_normalization/
-exp003_phase_dtw/
+exp01_pose_model/
+exp02_mediapipe_height/
+exp03_ryu_temporal/
 ```
 
-영문 폴더명은 파일 관리용이고, 문서 안에서는 한글 설명을 함께 적습니다.
+폴더명은 실험 흐름을 보기 쉽도록 짧은 번호형으로 작성합니다. 기존 실험 ID는 각 실험 폴더의 `README.md` 첫 부분에 `원래 실험 ID`로 남깁니다.
+
+RTMPose 기반 과거 실험은 별도 실험 폴더로 분리하지 않습니다. 현재 알고리즘 흐름은 MediaPipe 기준으로 정리하고, RTMPose는 `exp01_pose_model`에서 비교 근거로만 설명합니다.
+
+## 현재 정리 순서
+
+| 폴더 | 의미 |
+| --- | --- |
+| `exp01_pose_model` | RTMPose와 MediaPipe 비교 및 MediaPipe 기준 선택 |
+| `exp02_mediapipe_height` | MediaPipe 기반 키 정규화 기준선 |
+| `exp03_ryu_temporal` | 류현진 시간축 정규화 기준선 |
+| `exp04_user_temporal` | 사용자 영상 시간축 정규화 기준선 |
+| `exp05_pitchermotion` | PitcherMotion 스타일 시각화 1차 |
+| `exp06_pitchermotion_preroll` | 표시 구간 보정 포함 PitcherMotion 스타일 시각화 |
 
 ## 실험 폴더 권장 구조
 
@@ -34,7 +47,7 @@ exp001_example/
 - 주요 산출물 경로
 - 관찰 결과
 - 문제점
-- 다음 실험
+- 현재 결정
 
 ## 주의사항
 

@@ -53,7 +53,7 @@
 
 ## 유사도 알고리즘에 주는 의미
 
-## 다음 실험
+## 현재 결정
 ```
 
 ## 요약표 규칙
@@ -85,4 +85,3 @@ date,experiment_id,category,purpose,user_video,pro_video,pose_model,normalizatio
 
 - 전체 영상 동적 시간 정렬(DTW)은 다리 들기 이후 릴리즈까지 안정적으로 이어지지 않았다.
 - 키 기준 정규화만으로는 원근감과 전후 이동에 따른 크기 변화를 충분히 줄이지 못했다.
-- MediaPipe 3D world 좌표는 정량 지표보다 시각 검토에서 뼈대 방향 문제가 커서 폐기했다.
