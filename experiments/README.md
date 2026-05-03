@@ -26,6 +26,7 @@ RTMPose 기반 과거 실험은 별도 실험 폴더로 분리하지 않습니�
 | `exp04_user_temporal` | 사용자 영상 시간축 정규화 기준선 |
 | `exp05_pitchermotion` | PitcherMotion 스타일 시각화 1차 |
 | `exp06_pitchermotion_preroll` | 표시 구간 보정 포함 PitcherMotion 스타일 시각화 |
+| `exp07_phase_direction` | Phase 시작-끝 방향 벡터 기반 폼 유사도 B 실험 |
 
 ## 실험 폴더 권장 구조
 
