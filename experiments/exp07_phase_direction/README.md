@@ -14,7 +14,10 @@ Phase 시작-끝 방향 벡터 기반 폼 유사도 B 실험
 
 - 프로 영상: `/Users/sonjiwoon/capstone/pro_data/hyun_jin_ryu_ball_to_junior_caminero_20230923_6s.mp4`
 - 사용자 영상: `/Users/sonjiwoon/capstone/user_data/y1.mp4`
-- 결과 경로: `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp6`
+- 기존 실행 산출물 경로: `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp6`
+- 실험 정리 경로: `/Users/sonjiwoon/capstone/Analysis_algorithm/experiments/exp07_phase_direction`
+
+> 초기 실행 스크립트가 `outputs/exp6`에 결과를 만들었지만, 전체 실험 기록 정리에서는 이 내용을 `exp07_phase_direction`으로 관리한다.
 
 ## 방법
 

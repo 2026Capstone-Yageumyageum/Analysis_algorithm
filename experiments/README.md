@@ -27,13 +27,24 @@ RTMPose 기반 과거 실험은 별도 실험 폴더로 분리하지 않습니�
 | `exp05_pitchermotion` | PitcherMotion 스타일 시각화 1차 |
 | `exp06_pitchermotion_preroll` | 표시 구간 보정 포함 PitcherMotion 스타일 시각화 |
 | `exp07_phase_direction` | Phase 시작-끝 방향 벡터 기반 폼 유사도 B 실험 |
+| `exp08_service_api_scaffold` | 백엔드 연동용 Python 유사도 API 스캐폴드 |
 
 ## 실험 폴더 권장 구조
 
 ```text
-exp001_example/
+exp01_example/
   README.md
   config.yaml
+  notes.md
+```
+
+서비스 API 검증처럼 실행 결과 JSON과 CSV를 남기는 경우에는 아래 위치를 사용합니다.
+
+```text
+outputs/exp08_service_api_validation/
+  exp08_response.json
+  keypoints_user.csv
+  keypoints_pro.csv
   notes.md
 ```
 
@@ -53,5 +64,6 @@ exp001_example/
 ## 주의사항
 
 - 원본 영상과 대용량 mp4는 커밋하지 않습니다.
-- 실험별 결과 파일 경로는 `/Users/sonjiwoon/capstone/exp/result` 기준으로 기록합니다.
+- API 응답 JSON과 keypoints CSV는 재현/검토를 위한 소형 산출물로만 보관하고, 원본 영상은 저장하지 않습니다.
+- 실험별 결과 파일 경로는 실제 생성 위치를 절대경로로 기록합니다. 과거 실험은 `/Users/sonjiwoon/capstone/exp/result`, 알고리즘 레포 내부 산출물은 `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs`를 기준으로 남깁니다.
 - 논문에 쓸 판단 근거를 남기는 것을 우선합니다.

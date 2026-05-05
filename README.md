@@ -2,14 +2,71 @@
 
 프로 선수와 사용자 투구 영상을 비교하기 위한 유사도 알고리즘 실험 저장소입니다.
 
-현재 단계에서는 최종 유사도 점수를 확정하지 않고, 점수 계산 이전에 필요한 입력 데이터를 안정적으로 만드는 데 집중합니다.
+현재 단계에서는 유사도 알고리즘 v1을 서비스 API에 붙일 수 있는 수준으로 정리하는 데 집중합니다.
+
+## 현재 서비스 v1 기준
+
+서비스 연동 후보는 다음 기준으로 정리합니다.
 
 - MediaPipe 2D 관절 좌표 추출
 - 좌완/우완 방향 통일
 - 골반 중심, 몸통 기준, body-scale 단위 정규화
 - setup, leg lift, stride, release, follow-through 구간 분할
-- 구간별 동적 시간 정렬(DTW)
-- 정규화 스켈레톤 오버레이 영상 생성
+- phase별 시작-끝 body-frame 방향 벡터 비교
+- 관절 confidence 기반 phase 점수 가중 평균
+- phase별 가중 평균 기반 `overallScore`
+- 원본 영상 미저장, 사용자 skeleton CSV와 Top 3 점수 JSON 저장
+
+DTW, phase 내부 흐름 비교, 정규화 스켈레톤 오버레이 영상은 과거 실험 또는 다음 고도화 후보로 보관합니다. 현재 서비스 API v1 계산식에는 포함하지 않습니다.
+
+## 서비스 API 연동 방향
+
+현재 서비스 연동 방향은 다음과 같습니다.
+
+- 사용자 영상과 프로 skeleton reference는 후면 촬영 기준으로 비교합니다.
+- 원본 영상은 서버에 장기 저장하지 않습니다.
+- Python 서버는 사용자 영상 처리 후 `user_data.skeleton_data`, frame 정보, 프로 reference Top 3 비교 결과를 반환합니다.
+- 백엔드는 사용자 skeleton CSV를 DB에 저장하고, 프로 skeleton CSV는 reference 데이터로 관리합니다.
+- 백엔드는 프론트 조회 시 사용자/pro skeleton CSV를 표시용 skeleton JSON으로 변환합니다.
+- 프론트는 사용자가 기기에 저장한 원본 영상 위에 skeleton을 그립니다.
+
+관련 문서:
+
+- `docs/service_api_contract.md`
+- `docs/openapi.yaml`
+- `docs/backend_integration_guide.md`
+- `docs/service_handoff_checklist.md`
+- `docs/keypoints_csv_schema.md`
+- `docs/scoring_policy.md`
+- `docs/frontend_skeleton_rendering.md`
+- `docs/service_response_mock.md`
+- `docs/exp08_validation_plan.md`
+- `docs/goal_status.md`
+- `idea.md`
+
+서비스 코드 위치:
+
+- `/Users/sonjiwoon/capstone/integreted/server`
+- `/Users/sonjiwoon/capstone/integreted/web`
+
+주요 구현 파일:
+
+- `/Users/sonjiwoon/capstone/integreted/server/app.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/pose.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/normalization.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/phase.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/similarity.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/speed.py`
+- `/Users/sonjiwoon/capstone/integreted/server/analysis/video.py`
+
+프론트 표시용 keypoints 변환 참조 구현:
+
+- `scripts/keypoints_csv_to_display_keypoints.py`
+
+서비스 응답 검증 참조 구현:
+
+- `scripts/validate_pitch_analysis_response.py`
+- `scripts/run_exp08_service_validation.sh`
 
 ## 기본 실행
 
