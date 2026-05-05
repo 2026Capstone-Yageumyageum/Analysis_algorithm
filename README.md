@@ -1,3 +1,36 @@
+# Analysis Algorithm
+
+프로 선수와 사용자 투구 영상을 비교하기 위한 유사도 알고리즘 실험 저장소입니다.
+
+현재 단계에서는 최종 유사도 점수를 확정하지 않고, 점수 계산 이전에 필요한 입력 데이터를 안정적으로 만드는 데 집중합니다.
+
+- MediaPipe 2D 관절 좌표 추출
+- 좌완/우완 방향 통일
+- 골반 중심, 몸통 기준, body-scale 단위 정규화
+- setup, leg lift, stride, release, follow-through 구간 분할
+- 구간별 동적 시간 정렬(DTW)
+- 정규화 스켈레톤 오버레이 영상 생성
+
+## 기본 실행
+
+Python 3.11 사용을 권장합니다.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/run_pair_experiment.py
+```
+
+기본 입력 쌍은 다음과 같습니다.
+
+- 프로 영상: `/Users/sonjiwoon/capstone/pro_data/hyun_jin_ryu_ball_to_junior_caminero_20230923_6s.mp4`
+- 사용자 영상: `/Users/sonjiwoon/capstone/user_data/y1.mp4`
+
+실행 결과는 `outputs/expN`에 저장되며, 이 폴더는 커밋하지 않습니다.
+
+---
+
 # ⚾ 기여 가이드라인 (Contributing Guidelines)
 
 일관된 코드 품질과 효율적인 협업을 위해 아래 규칙을 준수해 주세요.

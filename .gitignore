@@ -1,0 +1,21 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv*/
+venv/
+
+# Local experiment outputs and media artifacts
+outputs/
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Local caches
+.cache/
+models/
+cache/
