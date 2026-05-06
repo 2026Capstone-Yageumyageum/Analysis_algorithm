@@ -14,8 +14,8 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 
 - 기본 사용자 영상: `/Users/sonjiwoon/capstone/user_data/y1.mp4`
 - 기본 프로 reference: 백엔드 DB에 저장된 프로 선수 `keypointsCsvText` 목록
-- 구현 위치: `/Users/sonjiwoon/capstone/integreted/server`
-- 실험 웹 위치: `/Users/sonjiwoon/capstone/integreted/web`
+- 구현 위치: `service/server`
+- 실험 웹 위치: `service/web`
 
 ## 방법
 
@@ -52,12 +52,12 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 
 | 파일 | 역할 |
 | --- | --- |
-| `/Users/sonjiwoon/capstone/integreted/server/app.py` | Flask API 엔드포인트와 응답 JSON 구성 |
-| `/Users/sonjiwoon/capstone/integreted/server/analysis/pose.py` | MediaPipe keypoints CSV 생성 |
-| `/Users/sonjiwoon/capstone/integreted/server/analysis/normalization.py` | pelvis/torso/body-scale 기반 분석 좌표 생성 |
-| `/Users/sonjiwoon/capstone/integreted/server/analysis/phase.py` | 후면 영상 기준 keypoints 기반 phase detection v1 |
-| `/Users/sonjiwoon/capstone/integreted/server/analysis/similarity.py` | phase별 방향 벡터 점수와 전체 점수 계산 |
-| `/Users/sonjiwoon/capstone/integreted/server/analysis/speed.py` | TOF 기반 구속 계산 |
+| `service/server/app.py` | Flask API 엔드포인트와 응답 JSON 구성 |
+| `service/server/analysis/pose.py` | MediaPipe keypoints CSV 생성 |
+| `service/server/analysis/normalization.py` | pelvis/torso/body-scale 기반 분석 좌표 생성 |
+| `service/server/analysis/phase.py` | 후면 영상 기준 keypoints 기반 phase detection v1 |
+| `service/server/analysis/similarity.py` | phase별 방향 벡터 점수와 전체 점수 계산 |
+| `service/server/analysis/speed.py` | TOF 기반 구속 계산 |
 
 ## 관찰 결과
 

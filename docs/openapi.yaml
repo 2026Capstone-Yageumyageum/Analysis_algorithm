@@ -297,14 +297,17 @@ components:
             $ref: "#/components/schemas/PlayerMatch"
     UserSkeletonData:
       type: object
-      required: [skeleton_data_id, skeleton_data, frame_count, fps, resolution]
+      required: [skeleton_data_id, skeleton_data, keypointsCsvText, frame_count, fps, resolution]
       properties:
         skeleton_data_id:
           type: string
           example: user_skeleton_8f31d2a9
         skeleton_data:
           type: string
-          description: 사용자 영상에서 추출한 keypoints.csv 원문
+          description: 사용자 영상에서 추출한 keypoints.csv 원문. 백엔드 저장용 기본 필드입니다.
+        keypointsCsvText:
+          type: string
+          description: skeleton_data와 같은 CSV 원문입니다. keypointsCsvText 명명 규칙을 쓰는 연동 계층을 위한 호환 alias입니다.
         frame_count:
           type: integer
           example: 123

@@ -132,6 +132,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `status`: 분석 상태
 - `user_data.skeleton_data_id`: 사용자 skeleton CSV를 DB에 저장할 때 사용할 유니크 ID
 - `user_data.skeleton_data`: 사용자 영상에서 추출한 `keypointsCsvText`
+- `user_data.keypointsCsvText`: `user_data.skeleton_data`와 같은 CSV 원문. `keypointsCsvText` 명명 규칙을 쓰는 연동 계층을 위한 호환 alias
 - `user_data.frame_count`: 사용자 영상 프레임 수
 - `user_data.fps`: 사용자 영상 FPS
 - `user_data.resolution`: 사용자 영상 해상도
@@ -153,6 +154,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
+    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
     "frame_count": 123,
     "fps": 60.0,
     "resolution": "1920x1080"
@@ -224,6 +226,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `scoreScale`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
+- `user_data.keypointsCsvText`
 - `user_data.frame_count`
 - `user_data.fps`
 - `user_data.resolution`

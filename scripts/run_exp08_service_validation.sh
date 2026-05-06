@@ -77,7 +77,6 @@ echo "[4/7] Requesting similarity analysis"
 curl -sS \
   -X POST "${SERVER_URL}/api/analyze/similarity" \
   -F "userVideo=@${USER_VIDEO}" \
-  -F "pro_skeleton_data=<${PRO_SKELETON_DATA_JSON}" \
   -F 'metadata={
     "videoId":"y1",
     "analysisType":"pro_similarity",

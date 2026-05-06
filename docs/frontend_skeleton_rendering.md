@@ -9,7 +9,7 @@
 -> 앱이 원본 영상을 사용자 기기에 저장
 -> Python 서버가 시작/갱신 시 백엔드에서 프로 skeleton reference를 캐싱
 -> 백엔드가 Python 서버로 userVideo 전달
--> Python 서버가 user_data.skeleton_data와 Top 3 players 점수 반환
+-> Python 서버가 user_data.skeleton_data, user_data.keypointsCsvText와 Top 3 players 점수 반환
 -> 백엔드가 사용자 skeleton CSV와 players 결과 저장
 -> 프론트가 결과 조회
 -> 프론트는 로컬 원본 영상 위에 displayKeypoints를 렌더링

@@ -25,7 +25,7 @@ DTW, phase 내부 흐름 비교, 정규화 스켈레톤 오버레이 영상은 �
 
 - 사용자 영상과 프로 skeleton reference는 후면 촬영 기준으로 비교합니다.
 - 원본 영상은 서버에 장기 저장하지 않습니다.
-- Python 서버는 사용자 영상 처리 후 `user_data.skeleton_data`, frame 정보, 프로 reference Top 3 비교 결과를 반환합니다.
+- Python 서버는 사용자 영상 처리 후 `user_data.skeleton_data`, `user_data.keypointsCsvText`, frame 정보, 프로 reference Top 3 비교 결과를 반환합니다.
 - 백엔드는 사용자 skeleton CSV를 DB에 저장하고, 프로 skeleton CSV는 reference 데이터로 관리합니다.
 - 백엔드는 프론트 조회 시 사용자/pro skeleton CSV를 표시용 skeleton JSON으로 변환합니다.
 - 프론트는 사용자가 기기에 저장한 원본 영상 위에 skeleton을 그립니다.
@@ -46,18 +46,18 @@ DTW, phase 내부 흐름 비교, 정규화 스켈레톤 오버레이 영상은 �
 
 서비스 코드 위치:
 
-- `/Users/sonjiwoon/capstone/integreted/server`
-- `/Users/sonjiwoon/capstone/integreted/web`
+- `service/server`
+- `service/web`
 
 주요 구현 파일:
 
-- `/Users/sonjiwoon/capstone/integreted/server/app.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/pose.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/normalization.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/phase.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/similarity.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/speed.py`
-- `/Users/sonjiwoon/capstone/integreted/server/analysis/video.py`
+- `service/server/app.py`
+- `service/server/analysis/pose.py`
+- `service/server/analysis/normalization.py`
+- `service/server/analysis/phase.py`
+- `service/server/analysis/similarity.py`
+- `service/server/analysis/speed.py`
+- `service/server/analysis/video.py`
 
 프론트 표시용 keypoints 변환 참조 구현:
 
@@ -67,6 +67,19 @@ DTW, phase 내부 흐름 비교, 정규화 스켈레톤 오버레이 영상은 �
 
 - `scripts/validate_pitch_analysis_response.py`
 - `scripts/run_exp08_service_validation.sh`
+
+## 서비스 API 실행
+
+레포 안에 포함된 서비스 API 스캐폴드는 `service/server`에서 실행합니다.
+
+```bash
+cd service/server
+python3.11 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python app.py
+```
+
+기본 주소는 `http://127.0.0.1:5020` 입니다. 프로 skeleton reference는 `PRO_SKELETON_DATA_URL` 또는 `PRO_SKELETON_DATA_FILE`로 서버 시작/갱신 시 캐싱합니다.
 
 ## 기본 실행
 

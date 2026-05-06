@@ -79,6 +79,7 @@
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "아래 user CSV 예시 문자열",
+    "keypointsCsvText": "아래 user CSV 예시 문자열",
     "frame_count": 240,
     "fps": 60.0,
     "resolution": "1080x1920"
@@ -166,7 +167,7 @@
 }
 ```
 
-`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 `players[].phaseScores`는 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. 프로 skeleton CSV 원문은 요청의 `pro_skeleton_data`에 이미 있으므로 응답에는 중복 포함하지 않습니다.
+`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 `players[].phaseScores`는 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
 
 ## `user_data.skeleton_data` 5프레임 축약 예시
 
@@ -181,7 +182,7 @@ frame_index,time_sec,left_shoulder_x,left_shoulder_y,left_shoulder_confidence,ri
 
 ## 캐시 `pro_skeleton_data[].keypointsCsvText` 5프레임 축약 예시
 
-아래 예시는 응답에 포함되는 값이 아니라, 백엔드가 Python 서버 요청에 넣어주는 프로 skeleton CSV 형식 예시입니다.
+아래 예시는 응답에 포함되는 값이 아니라, 백엔드가 Python 서버의 프로 skeleton cache API 또는 cache source에 제공하는 프로 skeleton CSV 형식 예시입니다.
 
 ```csv
 frame_index,time_sec,left_shoulder_x,left_shoulder_y,left_shoulder_confidence,right_shoulder_x,right_shoulder_y,right_shoulder_confidence,left_hip_x,left_hip_y,left_hip_confidence,right_hip_x,right_hip_y,right_hip_confidence,left_wrist_x,left_wrist_y,left_wrist_confidence,right_wrist_x,right_wrist_y,right_wrist_confidence,left_knee_x,left_knee_y,left_knee_confidence,right_knee_x,right_knee_y,right_knee_confidence,left_foot_index_x,left_foot_index_y,left_foot_index_confidence,right_foot_index_x,right_foot_index_y,right_foot_index_confidence,left_shoulder_x_smooth,left_shoulder_y_smooth,right_shoulder_x_smooth,right_shoulder_y_smooth,left_hip_x_smooth,left_hip_y_smooth,right_hip_x_smooth,right_hip_y_smooth,left_wrist_x_smooth,left_wrist_y_smooth,right_wrist_x_smooth,right_wrist_y_smooth,pitcher_com_x_smooth,pitcher_com_y_smooth,pitcher_detected,normalised_frame,no_missing_frames_flag,smooth_com_flag

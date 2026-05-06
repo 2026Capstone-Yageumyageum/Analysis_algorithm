@@ -135,6 +135,7 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,...",
+    "keypointsCsvText": "frame_index,time_sec,...",
     "frame_count": 123,
     "fps": 60.0,
     "resolution": "1920x1080"
@@ -192,7 +193,7 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 | --- | --- | --- |
 | `video_id` | varchar | `pitch_analysis.video_id` |
 | `skeleton_data_id` | varchar | Python 응답의 `user_data.skeleton_data_id` |
-| `keypoints_csv_text` | longtext | Python 응답의 `user_data.skeleton_data` |
+| `keypoints_csv_text` | longtext | Python 응답의 `user_data.skeleton_data`. `user_data.keypointsCsvText`도 같은 값으로 내려오는 호환 alias입니다. |
 | `frame_count` | integer | Python 응답의 `user_data.frame_count` |
 | `fps` | decimal | Python 응답의 `user_data.fps` |
 | `resolution` | varchar | 예: `1920x1080` |

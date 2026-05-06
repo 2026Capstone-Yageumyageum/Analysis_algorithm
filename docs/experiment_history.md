@@ -146,14 +146,15 @@ exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Pyth
 
 현재 위치:
 
-- `/Users/sonjiwoon/capstone/integreted/server`
-- `/Users/sonjiwoon/capstone/integreted/web`
+- `service/server`
+- `service/web`
 
 이 단계의 목적은 최종 알고리즘 품질 검증이 아니라, 백엔드/프론트와 맞출 데이터 흐름을 고정하는 것입니다.
 
 현재 결정:
 
-- 요청은 `userVideo`, `pro_skeleton_data`, `metadata`를 포함한 `multipart/form-data`로 받습니다.
+- Python 서버는 시작 또는 캐시 갱신 시 백엔드의 프로 skeleton reference 목록을 받아 메모리에 캐싱합니다.
+- 분석 요청은 `userVideo`, `metadata`만 포함한 `multipart/form-data`로 받습니다.
 - 촬영 방향은 후면으로 고정하며, `metadata.cameraView`가 `rear`가 아니면 서버에서 거부합니다.
 - 원본 영상은 임시 처리 후 저장하지 않습니다.
 - 응답에는 `responseSchemaVersion`, `scoreScale`, `user_data.skeleton_data`, `players` Top 3 결과를 포함합니다.
@@ -162,9 +163,9 @@ exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Pyth
 
 현재 구현 보강:
 
-- `integreted/server/analysis/phase.py`에 후면 영상 기준 keypoints 기반 phase detection v1을 추가했습니다.
-- `integreted/server/analysis/normalization.py`에 pelvis/torso/body-scale 기반 분석 좌표 생성을 추가했습니다.
-- `integreted/server/analysis/similarity.py`는 비율 기반 구간 대신 탐지된 phase 구간과 body-frame 좌표를 사용하도록 변경했습니다.
+- `service/server/analysis/phase.py`에 후면 영상 기준 keypoints 기반 phase detection v1을 추가했습니다.
+- `service/server/analysis/normalization.py`에 pelvis/torso/body-scale 기반 분석 좌표 생성을 추가했습니다.
+- `service/server/analysis/similarity.py`는 비율 기반 구간 대신 탐지된 phase 구간과 body-frame 좌표를 사용하도록 변경했습니다.
 - 공통 오류 응답을 `status:error` JSON 형태로 정리했습니다.
 - OpenAPI 초안과 5프레임 목업 응답을 추가했습니다.
 - `keypointsCsvText`를 프론트 표시용 `displayKeypoints`로 변환하는 참조 구현을 추가했습니다.

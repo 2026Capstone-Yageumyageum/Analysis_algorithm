@@ -9,7 +9,7 @@
 서비스 API에 붙일 수 있는 유사도 알고리즘 v1이 실제 영상에서 아래 조건을 만족하는지 확인합니다.
 
 - MediaPipe Pose가 실제 keypoints를 생성하는가
-- `user_data.skeleton_data`가 사용자 영상 전체 CSV 원문으로 응답되는가
+- `user_data.skeleton_data`와 `user_data.keypointsCsvText`가 사용자 영상 전체 CSV 원문으로 응답되는가
 - 서버 시작 시 캐싱된 프로 skeleton 목록과 비교한 Top 3 `players`가 응답되는가
 - 후면 영상 기준 phase detection v1이 납득 가능한 대표 프레임을 잡는가
 - phase별 `score`가 계산 가능한 상태로 반환되는가
@@ -22,15 +22,15 @@
 | --- | --- |
 | 사용자 영상 | `/Users/sonjiwoon/capstone/user_data/y1.mp4` |
 | 프로 reference | 백엔드 DB 또는 검증 fixture의 `pro_skeleton_data` JSON |
-| 서버 루트 | `/Users/sonjiwoon/capstone/integreted/server` |
-| 실험 웹 | `/Users/sonjiwoon/capstone/integreted/web` |
+| 서버 루트 | `service/server` |
+| 실험 웹 | `service/web` |
 
 ## 실행 환경
 
 MediaPipe Pose 기반 검증은 Python 3.11을 기준으로 합니다.
 
 ```bash
-cd /Users/sonjiwoon/capstone/integreted/server
+cd service/server
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 PRO_SKELETON_DATA_FILE=/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp08_service_api_validation/pro_skeleton_data.json \
@@ -108,6 +108,7 @@ exp08_service_api_validation/
 | `cameraView` | `rear` |
 | `algorithmName` | `body_frame_phase_direction_vector_v1` |
 | `user_data.skeleton_data` | `frame_index,time_sec,...`로 시작하는 CSV 문자열 |
+| `user_data.keypointsCsvText` | `user_data.skeleton_data`와 같은 CSV 문자열 |
 | `user_data.frame_count` | 사용자 영상 프레임 수 |
 | `user_data.fps` | 사용자 영상 FPS |
 | `user_data.resolution` | 예: `1920x1080` |
@@ -152,7 +153,7 @@ python /Users/sonjiwoon/capstone/Analysis_algorithm/scripts/keypoints_csv_to_dis
 
 아래 조건을 모두 만족하면 exp08은 “서비스 API 연동 가능한 v1 후보”로 통과 처리합니다.
 
-- `user_data.skeleton_data`가 비어 있지 않고, `docs/keypoints_csv_schema.md`의 필수 컬럼을 포함합니다.
+- `user_data.skeleton_data`와 `user_data.keypointsCsvText`가 비어 있지 않고, `docs/keypoints_csv_schema.md`의 필수 컬럼을 포함합니다.
 - `players`가 최대 3개이며 `rank` 순서대로 정렬됩니다.
 - `players[].overallScore`가 0~100 범위 숫자입니다.
 - `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 모두 존재합니다.

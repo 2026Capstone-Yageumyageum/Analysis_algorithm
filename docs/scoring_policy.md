@@ -4,7 +4,7 @@
 
 ## 현재 점수 후보
 
-현재 `integreted` 서버의 점수는 phase별 시작-끝 관절 방향 벡터 비교입니다.
+현재 `service` 서버의 점수는 phase별 시작-끝 관절 방향 벡터 비교입니다.
 
 입력 좌표는 원본 화면 좌표를 바로 쓰지 않고, 다음 분석용 좌표로 변환한 뒤 사용합니다.
 
@@ -81,9 +81,9 @@ overallScore = sum(phaseScore * phaseWeight) / sum(validPhaseWeight)
 
 ## 현재 구현 위치
 
-- `integreted/server/analysis/normalization.py`: pelvis/torso/body-scale 기반 분석 좌표 생성
-- `integreted/server/analysis/phase.py`: 후면 영상 기준 keypoints 기반 phase detection v1
-- `integreted/server/analysis/similarity.py`: confidence-weighted phase별 방향 벡터 점수와 overallScore 계산
+- `service/server/analysis/normalization.py`: pelvis/torso/body-scale 기반 분석 좌표 생성
+- `service/server/analysis/phase.py`: 후면 영상 기준 keypoints 기반 phase detection v1
+- `service/server/analysis/similarity.py`: confidence-weighted phase별 방향 벡터 점수와 overallScore 계산
 
 ## 다음 고도화 후보
 

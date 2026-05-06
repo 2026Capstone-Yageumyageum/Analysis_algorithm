@@ -8,7 +8,7 @@
 - 실행자:
 - 사용자 영상: `/Users/sonjiwoon/capstone/user_data/y1.mp4`
 - 프로 reference: 백엔드 DB 또는 검증 fixture의 `pro_skeleton_data`
-- 서버 경로: `/Users/sonjiwoon/capstone/integreted/server`
+- 서버 경로: `service/server`
 - 응답 저장 위치: `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp08_service_api_validation/exp08_response.json`
 
 ## 실행 환경

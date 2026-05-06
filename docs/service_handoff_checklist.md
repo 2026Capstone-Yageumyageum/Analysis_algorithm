@@ -7,7 +7,7 @@
 - 촬영 방향은 후면(`rear`)만 지원합니다.
 - 원본 영상은 Python 서버와 백엔드 서버에 장기 저장하지 않습니다.
 - Python 서버는 요청 처리 중 임시 파일로만 영상을 사용합니다.
-- 백엔드는 사용자 `user_data.skeleton_data`, Top 3 `players` 점수 JSON, phase 정보를 저장합니다.
+- 백엔드는 사용자 `user_data.skeleton_data`, 호환 alias `user_data.keypointsCsvText`, Top 3 `players` 점수 JSON, phase 정보를 저장합니다.
 - 프로 skeleton CSV는 백엔드 DB의 reference 데이터로 저장하고, Python 서버 시작/갱신 시 캐시로 전달합니다.
 - 프론트는 사용자 기기에 저장된 원본 영상 위에 `displayKeypoints`를 그립니다.
 
@@ -32,7 +32,7 @@
 - Python 응답의 `status`가 `completed`이면 분석 결과를 저장합니다.
 - Python 응답의 `status`가 `error`이면 `error.code`, `error.message` 기준으로 재시도 안내를 만듭니다.
 - `pitch_analysis`에는 schema version, algorithm, score scale, Top 3 `players` 요약을 저장합니다.
-- `pitch_user_skeleton`에는 `user_data.skeleton_data_id`, `user_data.skeleton_data`, frame count, fps, resolution을 저장합니다.
+- `pitch_user_skeleton`에는 `user_data.skeleton_data_id`, `user_data.skeleton_data` 또는 같은 값인 `user_data.keypointsCsvText`, frame count, fps, resolution을 저장합니다.
 - `pitch_analysis_player_match`에는 Top 3 `players[].analysisId`, `proId`, `overallScore`, `phaseScores`를 분리 저장합니다.
 - 프론트 조회용 API에서는 CSV 원문을 그대로 내려주지 말고 `displayKeypoints`로 변환해 내려줍니다.
 - 변환 규칙은 `docs/backend_integration_guide.md`와 `scripts/keypoints_csv_to_display_keypoints.py`를 기준으로 합니다.
@@ -87,7 +87,7 @@
 - 사용자 skeleton CSV가 placeholder가 아니라 MediaPipe Pose 기반 실제 관절 좌표로 생성됐는지 확인합니다.
 - `responseSchemaVersion`이 `pitch_analysis_response_v1`인지 확인합니다.
 - `cameraView`가 `rear`인지 확인합니다.
-- `user_data.skeleton_data`에 `frame_index`, `time_sec`, 관절 좌표, confidence 컬럼이 포함되는지 확인합니다.
+- `user_data.skeleton_data`와 `user_data.keypointsCsvText`에 `frame_index`, `time_sec`, 관절 좌표, confidence 컬럼이 포함되는지 확인합니다.
 - `players`가 최대 3개이며 `overallScore` 기준으로 정렬되어 있는지 확인합니다.
 - `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 있는지 확인합니다.
 - 구속 계산을 쓰는 경우 `arrivalFrame > releaseFrame`, `fps > 0`, `targetDistanceM - releaseExtensionM > 0` 조건을 만족하는지 확인합니다.

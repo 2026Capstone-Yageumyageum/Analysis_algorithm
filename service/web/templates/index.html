@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integrated Pitch Lab</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Integrated Pitch Lab</p>
+        <h1>유사도 알고리즘 + 구속 측정 실험</h1>
+        <p>
+          Python 서버가 시작할 때 백엔드에서 프로 skeleton reference를 캐싱하고,
+          분석 요청 때는 사용자 영상만 받아 Top 3 프로 비교 결과를 JSON으로 반환합니다.
+        </p>
+      </section>
+
+      <section class="panel schema-panel">
+        <div>
+          <p class="eyebrow">Schema Check</p>
+          <h2>서비스 계약 확인</h2>
+          <p class="helper-text">
+            영상 처리 없이 서버의 응답 스키마 버전, 지원 카메라, 알고리즘, keypoints CSV 컬럼 수를 확인합니다.
+          </p>
+        </div>
+        <button type="button" id="schema-button" class="secondary-button">/api/schema 확인</button>
+      </section>
+
+      <section class="result-grid" id="schema-cards" hidden>
+        <article class="metric-card">
+          <span>스키마 버전</span>
+          <strong id="schema-version">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>지원 카메라</span>
+          <strong id="schema-camera">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>점수 범위</span>
+          <strong id="schema-score-scale">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>Phase 수</span>
+          <strong id="schema-phase-count">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>CSV 컬럼 수</span>
+          <strong id="schema-column-count">-</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <form id="analysis-form" class="grid-form">
+          <label>
+            사용자 영상
+            <input type="file" name="userVideo" accept="video/*" required />
+          </label>
+          <label>
+            구종
+            <select name="pitchType">
+              <option value="직구">직구</option>
+              <option value="슬라이더">슬라이더</option>
+              <option value="커브">커브</option>
+              <option value="체인지업">체인지업</option>
+            </select>
+          </label>
+          <label>
+            프로 선수 이름
+            <input name="playerName" value="류현진" />
+          </label>
+          <label>
+            최대 분석 프레임 수
+            <input name="maxFrames" type="number" min="1" placeholder="비워두면 전체" />
+          </label>
+          <label>
+            후방 실제 거리(m)
+            <input name="targetDistanceM" type="number" step="0.1" value="16.0" />
+          </label>
+          <label>
+            릴리즈 보정(m)
+            <input name="releaseExtensionM" type="number" step="0.1" value="1.5" />
+          </label>
+          <label>
+            사용자 릴리즈 프레임
+            <input name="userReleaseFrame" type="number" min="0" placeholder="선택" />
+          </label>
+          <label>
+            사용자 도착 프레임
+            <input name="userArrivalFrame" type="number" min="0" placeholder="선택" />
+          </label>
+          <button type="submit">분석 요청</button>
+        </form>
+      </section>
+
+      <section class="result-grid" id="result-cards" hidden>
+        <article class="metric-card">
+          <span>Top 1 유사도</span>
+          <strong id="overall-score">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>알고리즘</span>
+          <strong id="algorithm-name">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>사용자 CSV</span>
+          <strong id="keypoints-size">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>사용자 구속</span>
+          <strong id="user-speed">-</strong>
+        </article>
+      </section>
+
+      <section class="panel" id="phase-panel" hidden>
+        <div class="panel-head">
+          <h2>Phase별 유사도</h2>
+          <span id="pose-status">-</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>구간</th>
+                <th>점수</th>
+                <th>상태</th>
+                <th>사용자 프레임</th>
+                <th>프로 프레임</th>
+                <th>사용 관절</th>
+              </tr>
+            </thead>
+            <tbody id="phase-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>응답 JSON</h2>
+          <span id="status-text">대기 중</span>
+        </div>
+        <pre id="schema-output" hidden>{}</pre>
+        <pre id="output">{}</pre>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

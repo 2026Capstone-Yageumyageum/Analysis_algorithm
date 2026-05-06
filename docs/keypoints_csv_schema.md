@@ -1,6 +1,6 @@
 # keypointsCsvText 스키마
 
-`keypointsCsvText`는 Python 서버가 영상에서 추출한 `keypoints.csv` 원문을 JSON 문자열로 담은 값입니다.
+`keypointsCsvText`는 Python 서버가 영상에서 추출한 `keypoints.csv` 원문을 JSON 문자열로 담은 값입니다. 서비스 응답에서는 백엔드 저장용 기본 필드인 `user_data.skeleton_data`와 같은 값을 `user_data.keypointsCsvText` 호환 alias로 함께 내려줍니다.
 
 ## 의미
 
@@ -17,7 +17,7 @@
 - `pro`: 프로 영상에서 추출한 프레임별 관절 좌표
 - 각 행은 한 프레임을 의미합니다.
 - 좌표는 원본 영상 크기 기준의 0~1 정규화 좌표를 기본으로 합니다.
-- 실제 컬럼 순서의 source of truth는 Python 서버의 `GET /api/schema` 응답 중 `keypointsCsvColumns`와 `integreted/server/analysis/pose.py`의 `CSV_COLUMNS`입니다.
+- 실제 컬럼 순서의 source of truth는 Python 서버의 `GET /api/schema` 응답 중 `keypointsCsvColumns`와 `service/server/analysis/pose.py`의 `CSV_COLUMNS`입니다.
 
 ## 좌표와 confidence 해석
 
