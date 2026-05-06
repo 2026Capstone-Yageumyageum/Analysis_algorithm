@@ -11,7 +11,7 @@
 
 ## 현재 목표
 
-사용자 후면 투구 영상과 프로 후면 투구 영상을 입력받아, 원본 영상은 저장하지 않고 `keypointsCsvText`, phase별 점수, 전체 점수만 백엔드가 저장할 수 있도록 Python 유사도 분석 서버를 정리합니다.
+사용자 후면 투구 영상과 프로 후면 투구 영상을 입력받아, 원본 영상은 저장하지 않고 `skeleton_data`, phase별 점수, 전체 점수만 백엔드가 저장할 수 있도록 Python 유사도 분석 서버를 정리합니다.
 
 ## 아이디어 목록
 
@@ -28,7 +28,7 @@
 - 배경: 서비스에서는 사용자가 저장한 원본 영상 위에 skeleton을 그려야 합니다.
 - 아이디어: 분석용은 pelvis/torso/body-scale 정규화 좌표를 사용하고, 표시용은 원본 영상 기준 0~1 smooth 좌표를 유지합니다.
 - 기대 효과: 점수 계산은 카메라/신체 크기 차이에 덜 흔들리고, 프론트 표시는 원본 영상 위에 정확히 맞출 수 있습니다.
-- 적용 상태: `service/server/analysis/normalization.py`에서 분석용 body-frame 좌표를 만들고, 응답의 `keypointsCsvText`는 표시용 0~1 smooth 좌표를 유지합니다.
+- 적용 상태: `service/server/analysis/normalization.py`에서 분석용 body-frame 좌표를 만들고, 응답의 `skeleton_data`는 표시용 0~1 smooth 좌표를 유지합니다.
 
 ### 3. phase 내부 흐름 비교 후보 유지
 
@@ -43,10 +43,10 @@
 - 아이디어: 릴리즈 phase가 너무 짧게 잡히면 앞뒤 프레임을 확장하거나 `release_window`를 별도 정의합니다.
 - 기대 효과: 손목/팔꿈치 벡터가 한 프레임 오차에 크게 흔들리는 문제를 줄입니다.
 
-### 5. keypointsCsvText는 저장용 원문, 프론트는 파싱된 표시용 JSON
+### 5. skeleton_data는 저장용 원문, 프론트는 파싱된 표시용 JSON
 
 - 배경: 백엔드는 DB에 분석 결과를 저장해야 하고, 프론트는 skeleton을 그려야 합니다.
-- 아이디어: Python 서버 응답에는 `keypointsCsvText`를 포함해 DB 저장 원문을 보장하고, 백엔드가 프론트 응답 시에는 `_smooth` 좌표 중심의 `displayKeypoints`로 변환합니다.
+- 아이디어: Python 서버 응답에는 `skeleton_data`를 포함해 DB 저장 원문을 보장하고, 백엔드가 프론트 응답 시에는 `_smooth` 좌표 중심의 `displayKeypoints`로 변환합니다.
 - 기대 효과: 실험 재현성과 프론트 렌더링 편의성을 동시에 확보합니다.
 
 ### 6. 관절 confidence 기반 phase 점수 가중 평균

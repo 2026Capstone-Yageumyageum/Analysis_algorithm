@@ -124,12 +124,6 @@ def _validate_user_data(value: Any, errors: list[str]) -> None:
     _expect(_is_finite_number(value.get("fps")), "user_data.fps가 유한한 숫자가 아닙니다.", errors)
     _expect(isinstance(value.get("resolution"), str), "user_data.resolution이 문자열이 아닙니다.", errors)
     _validate_keypoints_csv(value.get("skeleton_data"), "user_data.skeleton_data", errors)
-    _validate_keypoints_csv(value.get("keypointsCsvText"), "user_data.keypointsCsvText", errors)
-    _expect(
-        value.get("skeleton_data") == value.get("keypointsCsvText"),
-        "user_data.skeleton_data와 user_data.keypointsCsvText가 다릅니다.",
-        errors,
-    )
 
 
 def _validate_players(value: Any, errors: list[str], warnings: list[str], *, strict: bool) -> None:
@@ -305,14 +299,6 @@ def _validate_video_meta(value: Any, errors: list[str]) -> None:
             _expect(isinstance(meta.get(field_name), int), f"videoMeta.{target}.{field_name}가 정수가 아닙니다.", errors)
         for field_name in ("fps", "durationSec"):
             _expect(_is_finite_number(meta.get(field_name)), f"videoMeta.{target}.{field_name}가 유한한 숫자가 아닙니다.", errors)
-
-
-def _validate_keypoints_csv_text(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("keypointsCsvText가 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        _validate_keypoints_csv(value.get(target), f"keypointsCsvText.{target}", errors)
 
 
 def _validate_keypoints_csv(value: Any, path: str, errors: list[str]) -> None:

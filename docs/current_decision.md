@@ -29,7 +29,7 @@ MediaPipe 2D 관절 좌표
 - 투구 구간을 먼저 나누면 다리 들기, 보폭 이동, 릴리즈 등 같은 의미의 동작끼리 비교할 수 있습니다.
 - 골반 중심 상대좌표와 몸통/신체 크기 정규화는 화면 위치보다 신체 구조 중심의 비교를 가능하게 합니다.
 - 현재 첫 정량화 후보로는 phase 시작-끝 방향 벡터 기반 B 실험을 진행했습니다. 이 방식은 속도와 이동량 크기를 줄이고 동작 방향만 비교할 수 있지만, phase 내부의 궤적 변화는 반영하지 못합니다.
-- 서비스 API 연동 단계에서는 원본 영상 저장을 피하고, Python 서버가 반환하는 사용자 `user_data.skeleton_data`, 호환 alias `user_data.keypointsCsvText`, Top 3 `players` 점수 JSON만 백엔드 DB에 저장하는 방향으로 정리합니다.
+- 서비스 API 연동 단계에서는 원본 영상 저장을 피하고, Python 서버가 반환하는 사용자 `user_data.skeleton_data`, Top 3 `players` 점수 JSON만 백엔드 DB에 저장하는 방향으로 정리합니다.
 - 프로 선수 skeleton CSV는 백엔드 DB의 reference 데이터로 저장하고, Python 서버 시작/갱신 시 프로 skeleton 목록 API를 통해 캐싱합니다.
 - 프론트 표시는 백엔드가 사용자/pro skeleton CSV를 표시용 JSON으로 파싱한 뒤, 사용자가 기기에 저장한 원본 영상 또는 프로 영상 자산 위에 skeleton을 그리는 방식으로 진행합니다.
 
@@ -48,7 +48,7 @@ MediaPipe 2D 관절 좌표
 - `docs/openapi.yaml`: 서비스 API 엔드포인트와 응답 스키마 OpenAPI 초안
 - `docs/backend_integration_guide.md`: 백엔드 DB 저장 구조와 프론트 DTO 변환 규칙
 - `docs/service_handoff_checklist.md`: 백엔드/프론트/Python 서버 인수인계 체크리스트
-- `docs/keypoints_csv_schema.md`: `keypointsCsvText` 저장 스키마
+- `docs/keypoints_csv_schema.md`: `skeleton_data` 저장 스키마
 - `docs/scoring_policy.md`: phase별 점수와 overallScore 계산 정책
 - `docs/frontend_skeleton_rendering.md`: 프론트 skeleton 표시용 데이터 구조
 - `docs/service_response_mock.md`: 백엔드/프론트 연동용 목업 응답과 5프레임 CSV 예시

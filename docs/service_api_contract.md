@@ -17,7 +17,7 @@
 
 백엔드 서버는 사용자 투구 영상과 프로 선수 투구 분석 데이터를 Python 분석 서버로 전달하고, Python 서버는 분석 결과를 JSON으로 반환합니다.
 
-중요한 변경점은 프로 선수 입력입니다. 서비스 구조에서는 프로 영상을 매번 보내지 않고, Python 서버가 시작될 때 백엔드 DB에 이미 저장된 프로 선수의 `keypointsCsvText` 목록을 받아 메모리에 캐싱합니다. 이후 분석 요청에서는 사용자 영상만 새로 포즈 추출한 뒤, 캐싱된 프로 skeleton 데이터들과 비교합니다.
+중요한 변경점은 프로 선수 입력입니다. 서비스 구조에서는 프로 영상을 매번 보내지 않고, Python 서버가 시작될 때 백엔드 DB에 이미 저장된 프로 선수의 `skeleton_data` 목록을 받아 메모리에 캐싱합니다. 이후 분석 요청에서는 사용자 영상만 새로 포즈 추출한 뒤, 캐싱된 프로 skeleton 데이터들과 비교합니다.
 
 요청 구조는 `multipart/form-data`입니다.
 
@@ -99,7 +99,7 @@ Python 서버가 시작 시 백엔드에서 받아와 캐싱하는 프로 skelet
     "proId": "123123213",
     "playerName": "류현진",
     "skeletonDataId": "pro_skeleton_ryu_001",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
     "frameCount": 180,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -108,7 +108,7 @@ Python 서버가 시작 시 백엔드에서 받아와 캐싱하는 프로 skelet
     "proId": "123123214",
     "playerName": "프로 선수 2",
     "skeletonDataId": "pro_skeleton_002",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...",
     "frameCount": 210,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -118,7 +118,7 @@ Python 서버가 시작 시 백엔드에서 받아와 캐싱하는 프로 skelet
 
 `metadata.user`, `metadata.speed`, `metadata.speed.user`는 값이 있을 경우 JSON object여야 합니다. 문자열이나 배열처럼 object가 아닌 값이 들어오면 Python 서버는 `400 bad_request`로 응답합니다.
 
-프로 skeleton cache payload는 JSON array이거나, `pro_skeleton_data`, `proSkeletonData`, `items`, `data` 중 하나의 key에 array를 담은 object여야 합니다. 각 항목은 최소 `proId`와 `keypointsCsvText`를 포함해야 합니다.
+프로 skeleton cache payload는 JSON array이거나, `pro_skeleton_data`, `proSkeletonData`, `items`, `data` 중 하나의 key에 array를 담은 object여야 합니다. 각 항목은 최소 `proId`와 `skeleton_data`를 포함해야 합니다.
 
 Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상위 3개만 응답의 `players`에 담습니다.
 
@@ -131,8 +131,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `videoId`: 사용자 영상 ID
 - `status`: 분석 상태
 - `user_data.skeleton_data_id`: 사용자 skeleton CSV를 DB에 저장할 때 사용할 유니크 ID
-- `user_data.skeleton_data`: 사용자 영상에서 추출한 `keypointsCsvText`
-- `user_data.keypointsCsvText`: `user_data.skeleton_data`와 같은 CSV 원문. `keypointsCsvText` 명명 규칙을 쓰는 연동 계층을 위한 호환 alias
+- `user_data.skeleton_data`: 사용자 영상에서 추출한 keypoints CSV 원문
 - `user_data.frame_count`: 사용자 영상 프레임 수
 - `user_data.fps`: 사용자 영상 FPS
 - `user_data.resolution`: 사용자 영상 해상도
@@ -154,7 +153,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
     "frame_count": 123,
     "fps": 60.0,
     "resolution": "1920x1080"
@@ -226,7 +224,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `scoreScale`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
-- `user_data.keypointsCsvText`
 - `user_data.frame_count`
 - `user_data.fps`
 - `user_data.resolution`

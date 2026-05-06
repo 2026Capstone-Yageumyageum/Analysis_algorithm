@@ -37,7 +37,7 @@
     "proId": "123123213",
     "playerName": "류현진",
     "skeletonDataId": "pro_skeleton_ryu_001",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
     "frameCount": 180,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -46,7 +46,7 @@
     "proId": "123123214",
     "playerName": "프로 선수 2",
     "skeletonDataId": "pro_skeleton_002",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...",
     "frameCount": 210,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -55,7 +55,7 @@
     "proId": "123123215",
     "playerName": "프로 선수 3",
     "skeletonDataId": "pro_skeleton_003",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...",
     "frameCount": 198,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -79,7 +79,6 @@
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "아래 user CSV 예시 문자열",
-    "keypointsCsvText": "아래 user CSV 예시 문자열",
     "frame_count": 240,
     "fps": 60.0,
     "resolution": "1080x1920"
@@ -216,7 +215,7 @@ frame_index,time_sec,left_shoulder_x,left_shoulder_y,left_shoulder_confidence,ri
 4,0.066667,0.434,0.324,0.97,0.574,0.325,0.97,0.455,0.556,0.98,0.555,0.557,0.98,0.356,0.575,0.93,0.655,0.576,0.93,0.436,0.717,0.96,0.576,0.718,0.96,0.414,0.928,0.94,0.594,0.929,0.94,0.434,0.324,0.574,0.325,0.455,0.556,0.555,0.557,0.356,0.575,0.655,0.576,0.505,0.441,true,4,true,true
 ```
 
-## 캐시 `pro_skeleton_data[].keypointsCsvText` 5프레임 축약 예시
+## 캐시 `pro_skeleton_data[].skeleton_data` 5프레임 축약 예시
 
 아래 예시는 응답에 포함되는 값이 아니라, 백엔드가 Python 서버의 프로 skeleton cache API 또는 cache source에 제공하는 프로 skeleton CSV 형식 예시입니다.
 

@@ -64,7 +64,7 @@ def build_csv_columns() -> list[str]:
 CSV_COLUMNS = build_csv_columns()
 
 
-def extract_keypoints_csv_text(video_path: Path, max_frames: int | None = None) -> tuple[str, dict[str, Any]]:
+def extract_skeleton_data_csv_text(video_path: Path, max_frames: int | None = None) -> tuple[str, dict[str, Any]]:
     """Extract MediaPipe pose landmarks and serialize the project CSV schema.
 
     If MediaPipe is not installed, this returns a deterministic placeholder CSV

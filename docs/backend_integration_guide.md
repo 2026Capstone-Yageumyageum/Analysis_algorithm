@@ -91,7 +91,7 @@ PRO_SKELETON_DATA_FILE=/path/to/pro_skeleton_data.json
     "proId": "123123213",
     "playerName": "류현진",
     "skeletonDataId": "pro_skeleton_ryu_001",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...",
     "frameCount": 180,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -100,7 +100,7 @@ PRO_SKELETON_DATA_FILE=/path/to/pro_skeleton_data.json
     "proId": "123123214",
     "playerName": "프로 선수 2",
     "skeletonDataId": "pro_skeleton_002",
-    "keypointsCsvText": "frame_index,time_sec,nose_x,nose_y,...",
+    "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...",
     "frameCount": 210,
     "fps": 30.0,
     "resolution": "1280x720"
@@ -110,7 +110,7 @@ PRO_SKELETON_DATA_FILE=/path/to/pro_skeleton_data.json
 
 `metadata.user`, `metadata.speed`, `metadata.speed.user`는 값이 있을 경우 JSON object로 보내야 합니다. object가 아닌 값은 Python 서버에서 `400 bad_request`로 거부합니다.
 
-프로 skeleton cache payload의 각 항목은 최소 `proId`, `keypointsCsvText`를 포함해야 합니다. Python 서버는 캐싱된 전체 프로 skeleton 목록을 비교하고 `overallScore` 기준 Top 3만 응답합니다.
+프로 skeleton cache payload의 각 항목은 최소 `proId`, `skeleton_data`를 포함해야 합니다. Python 서버는 캐싱된 전체 프로 skeleton 목록을 비교하고 `overallScore` 기준 Top 3만 응답합니다.
 
 구속 계산을 함께 요청할 때는 `arrivalFrame > releaseFrame`, `fps > 0`, `targetDistanceM - releaseExtensionM > 0` 조건을 만족해야 합니다. 조건을 만족하지 않으면 분석 요청 자체는 성공할 수 있지만, 해당 `speed.user` 또는 `speed.pro`는 `status: invalid`로 내려갑니다.
 
@@ -135,7 +135,6 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,...",
-    "keypointsCsvText": "frame_index,time_sec,...",
     "frame_count": 123,
     "fps": 60.0,
     "resolution": "1920x1080"
@@ -193,7 +192,7 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 | --- | --- | --- |
 | `video_id` | varchar | `pitch_analysis.video_id` |
 | `skeleton_data_id` | varchar | Python 응답의 `user_data.skeleton_data_id` |
-| `keypoints_csv_text` | longtext | Python 응답의 `user_data.skeleton_data`. `user_data.keypointsCsvText`도 같은 값으로 내려오는 호환 alias입니다. |
+| `skeleton_data` | longtext | Python 응답의 `user_data.skeleton_data` |
 | `frame_count` | integer | Python 응답의 `user_data.frame_count` |
 | `fps` | decimal | Python 응답의 `user_data.fps` |
 | `resolution` | varchar | 예: `1920x1080` |
@@ -213,7 +212,7 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 
 ## Backend -> Frontend 결과 응답 DTO
 
-프론트에는 CSV 원문을 그대로 보내지 않는 것을 권장합니다. 백엔드가 `keypointsCsvText`를 파싱해서 `_smooth` 좌표 중심의 `displayKeypoints`로 변환합니다.
+프론트에는 CSV 원문을 그대로 보내지 않는 것을 권장합니다. 백엔드가 `skeleton_data`를 파싱해서 `_smooth` 좌표 중심의 `displayKeypoints`로 변환합니다.
 
 ```json
 {
@@ -315,7 +314,7 @@ if selectedPlayer.phaseScores[].userStartFrame <= frameIndex <= selectedPlayer.p
     phase = selectedPlayer.phaseScores[].phase
 ```
 
-프로 skeleton을 화면에 함께 표시해야 하면, 선택된 `players[].proId`에 해당하는 백엔드 DB의 `pro_skeleton_data.keypointsCsvText`를 파싱하고 `proStartFrame`, `proEndFrame` 기준으로 phase를 매핑합니다.
+프로 skeleton을 화면에 함께 표시해야 하면, 선택된 `players[].proId`에 해당하는 백엔드 DB의 `pro_skeleton_data.skeleton_data`를 파싱하고 `proStartFrame`, `proEndFrame` 기준으로 phase를 매핑합니다.
 
 ## 변환 참조 구현
 

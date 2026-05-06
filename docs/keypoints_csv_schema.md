@@ -1,12 +1,12 @@
-# keypointsCsvText 스키마
+# skeleton_data 스키마
 
-`keypointsCsvText`는 Python 서버가 영상에서 추출한 `keypoints.csv` 원문을 JSON 문자열로 담은 값입니다. 서비스 응답에서는 백엔드 저장용 기본 필드인 `user_data.skeleton_data`와 같은 값을 `user_data.keypointsCsvText` 호환 alias로 함께 내려줍니다.
+`skeleton_data`는 Python 서버가 영상에서 추출한 `keypoints.csv` 원문을 JSON 문자열로 담은 값입니다. 서비스 응답에서는 백엔드 저장용 기본 필드인 `user_data.skeleton_data`만 내려줍니다.
 
 ## 의미
 
 ```json
 {
-  "keypointsCsvText": {
+  "skeleton_data": {
     "user": "사용자 영상 keypoints.csv 원문",
     "pro": "프로 영상 keypoints.csv 원문"
   }
@@ -154,6 +154,6 @@ smooth_com_flag
 
 ## 저장 정책
 
-백엔드는 `keypointsCsvText`를 처음에는 `TEXT` 또는 `LONGTEXT`로 그대로 저장하는 방식을 권장합니다.
+백엔드는 `skeleton_data`를 처음에는 `TEXT` 또는 `LONGTEXT`로 그대로 저장하는 방식을 권장합니다.
 
 이후 검색/통계가 필요해지면 CSV 원문을 유지한 채 별도 파싱 테이블을 추가합니다.

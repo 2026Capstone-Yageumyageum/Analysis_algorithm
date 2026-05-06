@@ -87,7 +87,6 @@ python3.11 -m venv .venv
 - `algorithmName`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
-- `user_data.keypointsCsvText`
 - `players[].overallScore`
 - `players[].phaseScores`
 - `players[].phaseDetection`

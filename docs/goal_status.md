@@ -14,7 +14,7 @@
 - 프론트 skeleton 표시용 데이터 구조 정리
 - 한국어 실험 기록 유지
 - 원본 영상 미저장 구조 유지
-- 서버 응답에 사용자 `user_data.skeleton_data`와 `user_data.keypointsCsvText` 포함
+- 서버 응답에 사용자 `user_data.skeleton_data` 포함
 - 요청 전까지 테스트 실행하지 않기
 
 ## 요구사항별 증거
@@ -36,7 +36,7 @@
 | 후면 영상 기준 phase detection 고도화 | `service/server/analysis/phase.py` | 최소 길이 fallback 보정까지 구현. exp08 strict 검증 통과 |
 | pelvis/torso/body-scale 기반 2D 정규화 반영 | `service/server/analysis/normalization.py`, `docs/scoring_policy.md`, `service/server/app.py` | 구현 완료. 응답 JSON 진단 메타 포함 |
 | 원본 영상 미저장 구조 유지 | `service/server/app.py`의 `TemporaryDirectory` 사용, `docs/service_api_contract.md` | 구현 완료 |
-| 서버 응답에 사용자 skeleton CSV 포함 | `service/server/app.py`, `docs/service_api_contract.md`, `docs/service_response_mock.md` | `user_data.skeleton_data`와 `user_data.keypointsCsvText` 호환 alias 모두 반영 완료 |
+| 서버 응답에 사용자 skeleton CSV 포함 | `service/server/app.py`, `docs/service_api_contract.md`, `docs/service_response_mock.md` | `user_data.skeleton_data` 반영 완료 |
 | 실험 결과를 한국어로 기록 | `experiments/`, `docs/`, `idea.md`, `results/summary.csv` | 완료 |
 | 테스트 실행 금지 | 사용자 요청 전까지 미실행. 사용자 승인 후 exp08 실영상 검증 실행 | 준수 |
 | exp08 검증 계획 | `docs/exp08_validation_plan.md` | 실행 전 절차와 합격/보류 기준 정리 완료 |

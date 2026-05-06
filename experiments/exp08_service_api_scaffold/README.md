@@ -13,7 +13,7 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 ## 입력 데이터
 
 - 기본 사용자 영상: `/Users/sonjiwoon/capstone/user_data/y1.mp4`
-- 기본 프로 reference: 백엔드 DB에 저장된 프로 선수 `keypointsCsvText` 목록
+- 기본 프로 reference: 백엔드 DB에 저장된 프로 선수 `skeleton_data` 목록
 - 구현 위치: `service/server`
 - 실험 웹 위치: `service/web`
 
@@ -70,7 +70,7 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 - `responseSchemaVersion`, `scoreScale`, OpenAPI 초안, 목업 응답, JSON 오류 응답을 추가해 백엔드 연동 기준을 구체화했다.
 - 사용자/pro skeleton CSV를 프론트 표시용 `displayKeypoints`로 바꾸는 참조 구현을 추가했다.
 - 실제 `user_data/y1.mp4`와 류현진 프로 skeleton reference 1개로 API 검증을 실행했다.
-- 기본 응답 계약 검증은 통과했고, 사용자 `skeleton_data`와 `keypointsCsvText` alias가 동일한 CSV 원문을 반환했다.
+- 기본 응답 계약 검증은 통과했고, 사용자 `skeleton_data`가 CSV 원문으로 반환되었다.
 - 사용자 영상은 446프레임, 60.025fps, 1080x1920 해상도로 분석되었다.
 - 첫 검증에서는 `stride` phase가 붕괴했지만, phase 최소 길이 guard와 fallback 확장 규칙을 적용한 뒤 strict 검증을 통과했다.
 - Top 1 류현진 비교 결과의 `overallScore`는 58.54로 반환되었다.

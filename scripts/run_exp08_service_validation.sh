@@ -45,7 +45,7 @@ payload = [
         "proId": "123123213",
         "playerName": "류현진",
         "skeletonDataId": "pro_skeleton_ryu_exp6",
-        "keypointsCsvText": csv_text,
+        "skeleton_data": csv_text,
         "frameCount": len(rows),
         "fps": fps,
         "resolution": "1280x720",

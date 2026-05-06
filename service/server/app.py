@@ -13,7 +13,7 @@ from werkzeug.exceptions import HTTPException, ServiceUnavailable
 from werkzeug.utils import secure_filename
 
 from analysis.pro_cache import cache_status, get_cached_pro_skeletons, refresh_pro_skeleton_cache
-from analysis.pose import CSV_COLUMNS, extract_keypoints_csv_text
+from analysis.pose import CSV_COLUMNS, extract_skeleton_data_csv_text
 from analysis.similarity import compute_similarity
 from analysis.speed import compute_tof_speed
 from analysis.video import inspect_video
@@ -115,7 +115,7 @@ def analyze_similarity():
 
         user_meta = inspect_video(user_path)
         max_frames = _parse_optional_int(metadata.get("maxFrames"))
-        user_csv_text, user_pose_meta = extract_keypoints_csv_text(user_path, max_frames=max_frames)
+        user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(user_path, max_frames=max_frames)
         players = _rank_player_matches(user_csv_text, pro_skeleton_data)
 
     return jsonify(
@@ -132,7 +132,6 @@ def analyze_similarity():
             "user_data": {
                 "skeleton_data_id": skeleton_data_id,
                 "skeleton_data": user_csv_text,
-                "keypointsCsvText": user_csv_text,
                 "frame_count": int(user_pose_meta.get("frameCount") or user_meta.get("frameCount") or 0),
                 "fps": float(user_meta.get("fps") or 0.0),
                 "resolution": _format_resolution(user_meta),
@@ -220,7 +219,7 @@ def _parse_optional_int(value) -> int | None:
 def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     for item in pro_skeleton_data:
-        similarity = compute_similarity(user_csv_text, item["keypointsCsvText"])
+        similarity = compute_similarity(user_csv_text, item["skeleton_data"])
         matches.append(
             {
                 "analysisId": item.get("analysisId") or item.get("analysis_id"),

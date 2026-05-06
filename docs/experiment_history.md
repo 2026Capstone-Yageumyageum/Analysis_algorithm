@@ -168,7 +168,7 @@ exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Pyth
 - `service/server/analysis/similarity.py`는 비율 기반 구간 대신 탐지된 phase 구간과 body-frame 좌표를 사용하도록 변경했습니다.
 - 공통 오류 응답을 `status:error` JSON 형태로 정리했습니다.
 - OpenAPI 초안과 5프레임 목업 응답을 추가했습니다.
-- `keypointsCsvText`를 프론트 표시용 `displayKeypoints`로 변환하는 참조 구현을 추가했습니다.
+- `skeleton_data`를 프론트 표시용 `displayKeypoints`로 변환하는 참조 구현을 추가했습니다.
 
 실영상 검증 결과:
 

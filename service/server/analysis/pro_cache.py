@@ -101,12 +101,12 @@ def _normalize_items(items: list[Any]) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         pro_id = item.get("proId") or item.get("pro_id") or item.get("id")
-        csv_text = item.get("keypointsCsvText") or item.get("skeleton_data") or item.get("skeletonData")
+        csv_text = item.get("skeleton_data") or item.get("skeletonData") or item.get("keypointsCsvText")
         if not pro_id or not isinstance(csv_text, str) or not csv_text.strip():
             continue
         normalized = dict(item)
         normalized["proId"] = str(pro_id)
-        normalized["keypointsCsvText"] = csv_text
+        normalized["skeleton_data"] = csv_text
         if "playerName" not in normalized and "player_name" in normalized:
             normalized["playerName"] = normalized["player_name"]
         if "skeletonDataId" not in normalized and "skeleton_data_id" in normalized:
