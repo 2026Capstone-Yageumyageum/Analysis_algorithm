@@ -75,7 +75,7 @@ overallScore = sum(phaseScore * phaseWeight) / sum(validPhaseWeight)
 ## 아직 부족한 점
 
 - phase 내부 궤적을 반영하지 못합니다.
-- 릴리즈 구간이 너무 짧으면 한 프레임 오차에 크게 흔들립니다. 현재는 최소 길이 확장을 v1로 적용했지만 실영상 검증이 필요합니다.
+- phase 구간이 너무 짧으면 한 프레임 오차에 크게 흔들립니다. 현재는 `stride`, `release`, `follow_through` 최소 길이 fallback을 v1로 적용했습니다.
 - 손목 confidence가 낮으면 투구팔 점수가 흔들릴 수 있습니다.
 - 후면 영상 원근감은 완전히 제거되지 않습니다.
 
@@ -89,4 +89,4 @@ overallScore = sum(phaseScore * phaseWeight) / sum(validPhaseWeight)
 
 - phase 내부를 일정 길이로 리샘플링한 뒤 방향 변화 흐름을 비교합니다.
 - 관절 방향 벡터에 관절 각도 차이를 함께 반영합니다.
-- 릴리즈 phase는 최소 프레임 길이 조건을 둡니다.
+- fallback 보정이 들어간 phase 경계가 실제 동작 의미와 맞는지 시각 검증합니다.

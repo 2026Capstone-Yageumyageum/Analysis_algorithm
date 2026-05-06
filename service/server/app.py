@@ -229,6 +229,8 @@ def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, A
                 "skeletonDataId": item.get("skeletonDataId") or item.get("skeleton_data_id"),
                 "overallScore": similarity.get("overallScore"),
                 "phaseScores": similarity.get("phaseScores", []),
+                "phaseDetection": similarity.get("phaseDetection", {}),
+                "normalization": similarity.get("normalization", {}),
                 "similarityStatus": similarity.get("status"),
             }
         )
@@ -242,6 +244,8 @@ def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, A
             "proId": match["proId"],
             "overallScore": match["overallScore"],
             "phaseScores": match["phaseScores"],
+            "phaseDetection": match.get("phaseDetection", {}),
+            "normalization": match.get("normalization", {}),
         }
         if match.get("playerName"):
             player["playerName"] = match["playerName"]

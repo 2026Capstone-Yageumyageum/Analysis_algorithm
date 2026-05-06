@@ -170,11 +170,21 @@ exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Pyth
 - OpenAPI 초안과 5프레임 목업 응답을 추가했습니다.
 - `keypointsCsvText`를 프론트 표시용 `displayKeypoints`로 변환하는 참조 구현을 추가했습니다.
 
+실영상 검증 결과:
+
+- 기본 사용자 영상 `user_data/y1.mp4`와 류현진 프로 skeleton reference 1개로 exp08 검증을 실행했습니다.
+- 기본 응답 계약 검증과 strict 검증이 모두 통과했습니다.
+- Top 1 류현진 비교 결과는 `overallScore` 58.54입니다.
+- phase별 점수는 `leg_lift` 71.77, `stride` 60.44, `release` 29.35, `follow_through` 91.05입니다.
+- 사용자 skeleton CSV는 446프레임, 약 348KB, 60.025fps, 1080x1920으로 반환되었습니다.
+- 원본 영상은 검증 결과 폴더에 저장하지 않았습니다.
+
 이 단계의 한계:
 
-- 아직 실영상 검증을 하지 않았습니다.
 - phase detection v1은 휴리스틱이므로 릴리즈/팔로스루 경계가 영상별로 흔들릴 수 있습니다.
-- confidence 기반 phase 점수 가중 평균은 적용했지만, 실제 영상 점수 분포 검증은 아직 하지 않았습니다.
+- 일부 phase는 최소 길이 fallback으로 확장되므로 시각 검토가 필요합니다.
+- 프로 reference가 1개라 Top 3 정렬 검증은 아직 제한적입니다.
+- confidence 기반 phase 점수 가중 평균은 적용했지만, 다양한 영상의 점수 분포 검증은 다음 실험에서 진행해야 합니다.
 
 관련 문서:
 

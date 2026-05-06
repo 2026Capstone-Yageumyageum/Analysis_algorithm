@@ -69,11 +69,21 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 - 점수 계산용 좌표와 표시용 좌표를 분리했다.
 - `responseSchemaVersion`, `scoreScale`, OpenAPI 초안, 목업 응답, JSON 오류 응답을 추가해 백엔드 연동 기준을 구체화했다.
 - 사용자/pro skeleton CSV를 프론트 표시용 `displayKeypoints`로 바꾸는 참조 구현을 추가했다.
+- 실제 `user_data/y1.mp4`와 류현진 프로 skeleton reference 1개로 API 검증을 실행했다.
+- 기본 응답 계약 검증은 통과했고, 사용자 `skeleton_data`와 `keypointsCsvText` alias가 동일한 CSV 원문을 반환했다.
+- 사용자 영상은 446프레임, 60.025fps, 1080x1920 해상도로 분석되었다.
+- 첫 검증에서는 `stride` phase가 붕괴했지만, phase 최소 길이 guard와 fallback 확장 규칙을 적용한 뒤 strict 검증을 통과했다.
+- Top 1 류현진 비교 결과의 `overallScore`는 58.54로 반환되었다.
+- 모든 phase가 `ready` 상태로 반환되었다.
+- Top 1 player 응답에 `phaseDetection`과 `normalization` 진단 메타를 포함했다.
+- 원본 영상은 검증 결과 폴더에 저장되지 않았다.
 
 ## 문제점
 
-- 아직 실영상 검증을 진행하지 않았다.
-- phase detection v1은 휴리스틱이므로 영상별로 릴리즈/팔로스루 경계가 흔들릴 수 있다.
+- 프로 영상에서 릴리즈 후보가 레그리프트와 너무 가까워 fallback 보정이 적용되었다.
+- 사용자 `follow_through` 구간도 원래 매우 짧게 잡혀 fallback 보정이 적용되었다.
+- strict 검증은 통과했지만 fallback으로 확장된 phase 경계가 실제 동작 의미와 맞는지는 시각 검토가 필요하다.
+- phase detection v1은 휴리스틱이므로 영상별로 스트라이드/릴리즈/팔로스루 경계가 흔들릴 수 있다.
 - phase 내부 궤적은 아직 반영하지 않는다.
 - confidence가 낮은 관절은 제외하고, 남은 관절은 confidence 기반 가중 평균으로 phase 점수를 계산한다.
 - 구속 측정은 자동 공 탐지가 아니라 수동 프레임 입력 기반 TOF 방식이다.
@@ -96,21 +106,18 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 - 응답 스키마 버전은 `pitch_analysis_response_v1`로 둔다.
 - 촬영 방향은 `rear`만 허용한다.
 - 원본 영상은 임시 처리 후 저장하지 않는다.
-- 후면 영상 기준 phase detection v1을 다음 실험에서 실제 영상으로 검증한다.
+- 후면 영상 기준 phase detection v1은 최소 길이 guard와 fallback 보정까지 포함한 v1 후보로 둔다.
 - 현재 점수는 최종 확정 점수가 아니라 서비스 연동 가능한 v1 후보 점수로 둔다.
+- exp08은 API 계약과 strict 검증을 통과했지만 fallback 보정 구간은 추가 시각 검토가 필요하다.
 
 ## 다음 단계
 
-실제 `user_data/y1.mp4`와 프로 skeleton CSV reference 목록을 사용해 exp08 검증을 진행한다.
+검증 기록은 `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp08_service_api_validation/notes.md`에 남겼다.
+
+다음 수정에서 확인할 항목:
+
+- fallback 보정이 들어간 phase 경계가 시각적으로도 납득 가능한가
+- 프로 reference를 3개 이상 넣었을 때 Top 3 정렬이 정상인가
+- phase 내부 궤적 리샘플링을 다음 실험으로 추가할 것인가
 
 상세 실행 절차와 합격/보류 기준은 `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/exp08_validation_plan.md`를 기준으로 한다.
-
-검증 시 확인할 항목:
-
-- phase 대표 프레임이 사람이 보기에도 납득 가능한가
-- 릴리즈 구간이 너무 짧게 잡히지 않는가
-- `players[].phaseScores`가 계산 가능한 상태로 반환되는가
-- `user_data.skeleton_data`가 백엔드 저장에 충분한 CSV 원문을 포함하는가
-- 프론트 표시용 JSON으로 변환할 때 필요한 smooth 좌표가 모두 있는가
-
-검증 기록은 `validation_notes_template.md`를 복사해 `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp08_service_api_validation/notes.md`로 작성한다.

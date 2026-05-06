@@ -54,13 +54,28 @@ def detect_pitch_phases(normalized_pose: pd.DataFrame) -> PhaseDetection:
     release_score = (0.78 * _normalize(wrist_speed)) + (0.22 * _normalize(elbow_speed))
     release_idx = _choose(release_candidates, release_score, mode="max", fallback=leg_lift_idx)
 
+    minimum_phase_gap = max(3, int(frame_count * 0.025))
+
+    if release_idx - leg_lift_idx < minimum_phase_gap * 2:
+        release_idx = min(frame_count - 1, leg_lift_idx + minimum_phase_gap * 2)
+        warnings.append("레그리프트 이후 릴리즈 후보가 너무 가까워 최소 간격으로 확장했습니다.")
+
     stride_candidates = indices[leg_lift_idx : max(leg_lift_idx + 1, release_idx + 1)]
     stride_distance = _point_distance_from_pelvis(normalized_pose, stride_foot).iloc[stride_candidates]
     stride_speed = _series(normalized_pose, f"{stride_foot}_speed_body").iloc[stride_candidates]
     stride_score = (0.70 * _normalize(stride_distance)) + (0.30 * (1.0 - _normalize(stride_speed)))
     stride_idx = _choose(stride_candidates, stride_score, mode="max", fallback=int((leg_lift_idx + release_idx) / 2))
 
-    minimum_release_gap = max(2, int(frame_count * 0.025))
+    if stride_idx - leg_lift_idx < minimum_phase_gap and release_idx > leg_lift_idx:
+        stride_idx = _fallback_between(
+            start_idx=leg_lift_idx,
+            end_idx=release_idx,
+            minimum_gap=minimum_phase_gap,
+            frame_count=frame_count,
+        )
+        warnings.append("스트라이드 구간이 너무 짧아 최소 길이 기준으로 확장했습니다.")
+
+    minimum_release_gap = minimum_phase_gap
     if release_idx - stride_idx < minimum_release_gap:
         release_idx = min(frame_count - 1, stride_idx + minimum_release_gap)
         warnings.append("릴리즈 구간이 너무 짧아 최소 길이 기준으로 확장했습니다.")
@@ -76,6 +91,10 @@ def detect_pitch_phases(normalized_pose: pd.DataFrame) -> PhaseDetection:
         mode="max",
         fallback=min(frame_count - 1, release_idx + max(1, int(frame_count * 0.12))),
     )
+    minimum_follow_gap = max(3, int(frame_count * 0.03))
+    if follow_idx - release_idx < minimum_follow_gap:
+        follow_idx = min(frame_count - 1, release_idx + minimum_follow_gap)
+        warnings.append("팔로스루 구간이 너무 짧아 최소 길이 기준으로 확장했습니다.")
 
     representatives = {
         "setup": int(_frame_at(normalized_pose, setup_idx)),
@@ -100,6 +119,18 @@ def _build_intervals(representatives: dict[str, int | None], last_frame: int) ->
         "release": {"phase": "release", "label": "릴리즈", "startFrame": stride, "endFrame": max(stride, release)},
         "follow_through": {"phase": "follow_through", "label": "팔로우 스루", "startFrame": release, "endFrame": max(release, follow)},
     }
+
+
+def _fallback_between(start_idx: int, end_idx: int, minimum_gap: int, frame_count: int) -> int:
+    """Choose a stable interior boundary when a detected phase collapses."""
+    if end_idx <= start_idx:
+        return min(frame_count - 1, start_idx + minimum_gap)
+    midpoint = start_idx + max(1, int((end_idx - start_idx) * 0.5))
+    expanded = start_idx + minimum_gap
+    fallback = max(midpoint, expanded)
+    if fallback >= end_idx:
+        fallback = max(start_idx + 1, end_idx - max(1, minimum_gap // 2))
+    return max(0, min(frame_count - 1, fallback))
 
 
 def _empty_representatives() -> dict[str, int | None]:
@@ -152,4 +183,3 @@ def _value_at(df: pd.DataFrame, column: str, row_index: int) -> float:
     row_index = max(0, min(len(df) - 1, row_index))
     value = pd.to_numeric(df[column], errors="coerce").iloc[row_index]
     return 0.0 if pd.isna(value) else float(value)
-

@@ -152,6 +152,10 @@ def _validate_players(value: Any, errors: list[str], warnings: list[str], *, str
         if current_score is not None:
             previous_score = current_score
         _validate_phase_scores(player.get("phaseScores"), errors, warnings, strict=strict, path=f"players[{index}].phaseScores")
+        if "phaseDetection" in player:
+            _validate_phase_detection(player.get("phaseDetection"), errors)
+        if "normalization" in player:
+            _validate_normalization(player.get("normalization"), errors)
 
 
 def _validate_pose_meta(value: Any, errors: list[str]) -> None:

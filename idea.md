@@ -17,18 +17,18 @@
 
 ### 1. phase detection을 비율 분할에서 keypoints 기반으로 전환
 
-- 배경: 현재 `integreted` 스캐폴드의 phase 구간은 영상 전체 길이를 비율로 나누는 임시 방식입니다.
+- 배경: 초기 스캐폴드의 phase 구간은 영상 전체 길이를 비율로 나누는 임시 방식이었습니다.
 - 아이디어: 다리 들기는 리드 무릎 높이, 스트라이드는 보폭 발 전진량, 릴리즈는 투구 손목 속도/팔꿈치-어깨 관계, 팔로스루는 릴리즈 이후 투구 손목 하강과 몸 중심 이동으로 잡습니다.
 - 기대 효과: phase 경계가 실제 투구 동작 의미와 맞아져 DTW와 phase별 점수가 덜 흔들립니다.
 - 확인 필요: 후면 영상에서 손목 confidence가 낮을 때 릴리즈 후보가 튀는지 확인해야 합니다.
-- 적용 상태: `integreted/server/analysis/phase.py`에 v1 휴리스틱을 추가했습니다. 아직 실영상 검증 전이므로 다음 단계에서 exp08로 검증해야 합니다.
+- 적용 상태: `service/server/analysis/phase.py`에 v1 휴리스틱과 최소 길이 fallback을 추가했습니다. exp08 실영상 strict 검증을 통과했습니다.
 
 ### 2. 분석용 좌표와 표시용 좌표를 분리
 
 - 배경: 서비스에서는 사용자가 저장한 원본 영상 위에 skeleton을 그려야 합니다.
 - 아이디어: 분석용은 pelvis/torso/body-scale 정규화 좌표를 사용하고, 표시용은 원본 영상 기준 0~1 smooth 좌표를 유지합니다.
 - 기대 효과: 점수 계산은 카메라/신체 크기 차이에 덜 흔들리고, 프론트 표시는 원본 영상 위에 정확히 맞출 수 있습니다.
-- 적용 상태: `integreted/server/analysis/normalization.py`에서 분석용 body-frame 좌표를 만들고, 응답의 `keypointsCsvText`는 표시용 0~1 smooth 좌표를 유지합니다.
+- 적용 상태: `service/server/analysis/normalization.py`에서 분석용 body-frame 좌표를 만들고, 응답의 `keypointsCsvText`는 표시용 0~1 smooth 좌표를 유지합니다.
 
 ### 3. phase 내부 흐름 비교 후보 유지
 
@@ -54,7 +54,7 @@
 - 배경: 후면 영상에서는 손목, 발목, 발끝 관절 confidence가 프레임마다 크게 흔들릴 수 있습니다.
 - 아이디어: phase 점수를 단순 평균하지 않고, 사용자와 프로 관절 confidence의 기하평균을 관절별 가중치로 사용합니다.
 - 기대 효과: 낮은 confidence 관절 하나가 phase 점수를 과도하게 끌어내리는 문제를 줄이고, 실제로 잘 검출된 관절을 더 신뢰합니다.
-- 적용 상태: `integreted/server/analysis/similarity.py`에 `confidenceWeight = sqrt(userConfidence * proConfidence)` 방식으로 1차 반영했습니다.
+- 적용 상태: `service/server/analysis/similarity.py`에 `confidenceWeight = sqrt(userConfidence * proConfidence)` 방식으로 1차 반영했습니다.
 - 확인 필요: 실영상에서 confidence가 높은 관절만 남아 점수가 지나치게 관대해지는지 확인해야 합니다.
 
 ### 7. phase detection 후보 선택에도 confidence를 반영
@@ -64,3 +64,19 @@
 - 기대 효과: MediaPipe가 손목이나 발끝을 잘못 찍은 한두 프레임 때문에 phase 경계가 튀는 문제를 줄일 수 있습니다.
 - 리스크: 후면 영상에서는 중요 관절 confidence가 전반적으로 낮을 수 있어, 너무 강하게 적용하면 phase를 못 찾는 경우가 늘어날 수 있습니다.
 - 적용 상태: 아직 미적용입니다. exp08 실영상 검증 후 phase 경계가 흔들릴 때 우선 적용 후보로 둡니다.
+
+### 8. phase 최소 길이 guard와 fallback 확장
+
+- 배경: exp08 실영상 검증에서 프로 `stride` 구간이 `242~242`로 붕괴했고 사용자 `follow_through` 구간도 `351~352`로 너무 짧게 잡혔습니다.
+- 아이디어: phase 시작/끝 프레임이 같거나 최소 길이보다 짧으면 release 기준 앞뒤 고정 window 또는 인접 phase 비율 window로 확장합니다.
+- 기대 효과: 시작-끝 방향 벡터가 1프레임 노이즈에 지배되는 문제를 줄이고 strict 검증에서 `no_valid_joint`가 발생하는 상황을 줄입니다.
+- 리스크: fallback window가 실제 phase 의미와 어긋나면 점수는 계산되지만 해석력이 떨어질 수 있습니다.
+- 적용 상태: `service/server/analysis/phase.py`에 1차 적용했습니다. exp08 재검증에서 모든 phase가 `ready`가 되었지만, fallback으로 확장된 구간의 시각 검토가 필요합니다.
+
+### 9. 응답 JSON에 phaseDetection과 normalization 진단 메타 포함
+
+- 배경: exp08 검증에서 normalization과 throwingSide가 실제 응답 JSON에 명시되지 않아 백엔드와 프론트가 품질 상태를 확인하기 어렵습니다.
+- 아이디어: `players[].phaseDetection` 또는 `diagnostics`에 phase별 탐지 근거, frame window, 최소 길이 보정 여부를 넣고, `normalization`에는 bodyScale, torso axis, throwingSide, mirror 여부를 넣습니다.
+- 기대 효과: 점수가 이상할 때 원인이 skeleton 품질인지 phase detection인지 정규화인지 빠르게 추적할 수 있습니다.
+- 리스크: 응답 크기와 계약 복잡도가 조금 늘어납니다.
+- 적용 상태: `service/server/app.py` 응답의 `players[]`에 `phaseDetection`과 `normalization`을 포함했습니다. `scripts/validate_pitch_analysis_response.py`에서도 해당 메타가 있으면 검증합니다.

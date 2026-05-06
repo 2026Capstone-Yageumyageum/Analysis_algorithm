@@ -346,6 +346,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PhaseScore"
+        phaseDetection:
+          type: object
+          description: 사용자와 프로의 phase 대표 프레임, interval, warning 진단 메타
+        normalization:
+          type: object
+          description: 사용자와 프로의 pelvis/torso/body-scale 정규화 요약과 warning 진단 메타
     PhaseScore:
       type: object
       required: [phase, label, score, userStartFrame, userEndFrame, proStartFrame, proEndFrame]

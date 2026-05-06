@@ -235,8 +235,12 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
+- `players[].phaseDetection`: 사용자와 프로의 phase 대표 프레임, 구간, 경고
+- `players[].normalization`: 사용자와 프로의 body-frame 정규화 요약, 투구손, mirror 적용 여부
 
 `players`는 전체 프로 skeleton 목록 중 `overallScore` 기준 상위 3개입니다. 각 `players[].phaseScores`에는 phase별 유사도와 사용자/프로 시작-끝 프레임이 들어가므로, 프론트의 phase별 비교 화면과 결과 상세 화면에서 함께 사용할 수 있습니다.
+
+`players[].phaseDetection`과 `players[].normalization`은 디버깅 및 품질 표시용 진단 메타입니다. 백엔드가 모두 저장해도 되고, 서비스 화면에서는 phase 경계가 fallback 보정되었는지 확인하는 용도로 사용할 수 있습니다.
 
 프로 skeleton CSV는 백엔드 DB에 이미 저장되어 있고 Python 서버 메모리 캐시에 올라와 있으므로, 응답에 다시 포함하지 않는 것을 기본으로 합니다. 필요하면 디버깅용 옵션으로만 포함합니다.
 

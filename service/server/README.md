@@ -90,6 +90,8 @@ python3.11 -m venv .venv
 - `user_data.keypointsCsvText`
 - `players[].overallScore`
 - `players[].phaseScores`
+- `players[].phaseDetection`
+- `players[].normalization`
 
 오류가 발생하면 백엔드가 처리하기 쉽도록 다음 JSON 형태로 반환합니다.
 
@@ -119,4 +121,4 @@ OpenCV가 영상 fps를 읽지 못해 `videoMeta.fps`가 `0`이면, 구속 계�
 
 ## 현재 한계
 
-이 서버는 서비스 연동용 v1 스캐폴드입니다. phase detection과 점수 계산은 아직 실영상 검증 전이며, 다음 실험에서 안정성을 확인해야 합니다. 특히 Python 3.13 이상 환경에서는 MediaPipe가 설치되지 않을 수 있으므로, 실제 분석 검증은 Python 3.11 기반 가상환경에서 진행해야 합니다.
+이 서버는 서비스 연동용 v1 후보입니다. exp08 실영상 검증에서 기본 계약과 strict 검증은 통과했지만, 일부 phase는 최소 길이 fallback 보정으로 확장됩니다. 따라서 fallback이 들어간 phase 경계는 시각 검토가 필요합니다. 특히 Python 3.13 이상 환경에서는 MediaPipe가 설치되지 않을 수 있으므로, 실제 분석 검증은 Python 3.11 기반 가상환경에서 진행해야 합니다.

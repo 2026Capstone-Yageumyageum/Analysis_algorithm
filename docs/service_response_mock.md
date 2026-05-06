@@ -127,7 +127,43 @@
           "proStartFrame": 176,
           "proEndFrame": 210
         }
-      ]
+      ],
+      "phaseDetection": {
+        "user": {
+          "representativeFrames": {
+            "setup": 0,
+            "leg_lift": 40,
+            "stride": 92,
+            "release": 128,
+            "follow_through": 180
+          },
+          "warnings": []
+        },
+        "pro": {
+          "representativeFrames": {
+            "setup": 0,
+            "leg_lift": 80,
+            "stride": 145,
+            "release": 176,
+            "follow_through": 210
+          },
+          "warnings": []
+        }
+      },
+      "normalization": {
+        "user": {
+          "status": "ready",
+          "method": "pelvis_torso_body_scale_2d_v1",
+          "throwingSide": "right",
+          "mirrorApplied": false
+        },
+        "pro": {
+          "status": "ready",
+          "method": "pelvis_torso_body_scale_2d_v1",
+          "throwingSide": "left",
+          "mirrorApplied": true
+        }
+      }
     },
     {
       "rank": 2,
@@ -167,7 +203,7 @@
 }
 ```
 
-`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 `players[].phaseScores`는 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
+`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 `players[].phaseScores`는 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. `players[].phaseDetection`과 `players[].normalization`은 phase 경계와 정규화 상태를 확인하기 위한 진단 메타입니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
 
 ## `user_data.skeleton_data` 5프레임 축약 예시
 
