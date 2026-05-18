@@ -34,7 +34,7 @@
 | phase별 feature와 관절 목록 확정 | `docs/scoring_policy.md`, `service/server/analysis/similarity.py` | 1차 완료 |
 | phase별 점수 및 `overallScore` 계산식 구현 | `service/server/analysis/similarity.py` | confidence 가중 평균까지 1차 완료 |
 | 후면 영상 기준 phase detection 고도화 | `service/server/analysis/phase.py` | 최소 길이 fallback 보정까지 구현. exp08 strict 검증 통과 |
-| pelvis/torso/body-scale 기반 2D 정규화 반영 | `service/server/analysis/normalization.py`, `docs/scoring_policy.md`, `service/server/app.py` | 구현 완료. 응답 JSON 진단 메타 포함 |
+| pelvis/torso/body-scale 기반 2D 정규화 반영 | `service/server/analysis/normalization.py`, `docs/scoring_policy.md`, `service/server/app.py` | 구현 완료. 응답 JSON은 백엔드 저장용 핵심 필드만 반환 |
 | 원본 영상 미저장 구조 유지 | `service/server/app.py`의 `TemporaryDirectory` 사용, `docs/service_api_contract.md` | 구현 완료 |
 | 서버 응답에 사용자 skeleton CSV 포함 | `service/server/app.py`, `docs/service_api_contract.md`, `docs/service_response_mock.md` | `user_data.skeleton_data` 반영 완료 |
 | 실험 결과를 한국어로 기록 | `experiments/`, `docs/`, `idea.md`, `results/summary.csv` | 완료 |
@@ -53,19 +53,19 @@
 | 고도화 아이디어를 `idea.md`에 계속 기록 | `Analysis_algorithm/idea.md` | phase detection, 분석/표시 좌표 분리, confidence 가중치 등 기록됨 |
 | exp01~exp07 실험 기록 정리 | `experiments/exp01_pose_model` ~ `experiments/exp07_phase_direction`, `docs/experiment_history.md`, `results/summary.csv` | 각 실험 목적, 방법, 관찰, 문제점, 결정이 한국어로 정리됨 |
 | 포즈 모델은 MediaPipe 기준 | `experiments/exp01_pose_model/README.md`, `docs/current_decision.md`, `service/server/analysis/pose.py` | MediaPipe Pose 사용 기준과 선택 이유가 문서화됨 |
-| 사용자/프로 영상은 후면 기준 비교 | `docs/service_api_contract.md`, `service/server/app.py` | `cameraView`가 `rear`로 고정되어 응답됨 |
+| 사용자/프로 영상은 후면 기준 비교 | `docs/service_api_contract.md`, `service/server/app.py` | `metadata.cameraView`가 비어 있거나 `rear`인 요청만 허용됨 |
 | 후면 촬영 API 입력 강제 | `service/server/app.py`, `docs/service_api_contract.md`, `docs/openapi.yaml` | `metadata.cameraView`가 `rear`가 아니면 요청을 거부하도록 정리됨 |
 | 원본 영상은 서버에 저장하지 않음 | `service/server/app.py` | `TemporaryDirectory` 안에서만 업로드 영상을 처리함 |
 | 사용자 skeleton CSV와 Top 3 점수 결과만 백엔드 DB 저장 방향 | `docs/keypoints_csv_schema.md`, `docs/backend_integration_guide.md`, `docs/service_api_contract.md` | DB 저장 권장 구조와 CSV 원문 저장 정책 문서화됨 |
 | `service/server`, `service/web` 스캐폴드 활용 | `service/server/`, `service/web/` | 서버와 실험용 웹 파일 존재 |
-| 서비스 API 응답과 스키마를 로컬 웹에서 확인 가능 | `service/web/templates/index.html`, `service/web/static/app.js`, `service/web/static/styles.css` | `/api/schema` 계약 확인, 전체 점수, 알고리즘명, keypoints CSV 크기, phase별 점수, 포즈 상태를 화면에 요약 표시 |
+| 서비스 API 응답과 스키마를 로컬 웹에서 확인 가능 | `service/web/templates/index.html`, `service/web/static/app.js`, `service/web/static/styles.css` | `/api/schema` 계약 확인, 전체 점수, keypoints CSV 크기, phase별 점수를 화면에 요약 표시 |
 | 현재 유사도는 phase별 시작-끝 방향 벡터 기반 | `service/server/analysis/similarity.py`, `docs/scoring_policy.md` | body-frame 시작-끝 방향 벡터 코사인 점수로 구현됨 |
 | 구속 측정은 실제 거리, 릴리즈 프레임, 도착 프레임 기반 TOF 방식 | `service/server/analysis/speed.py`, `docs/service_api_contract.md` | `releaseFrame`, `arrivalFrame`, 거리 기반 계산식 구현 및 `arrivalFrame > releaseFrame`, `fps > 0`, 유효 거리 조건 문서화됨 |
 | 영상 메타데이터 숫자 방어 | `service/server/analysis/video.py`, `service/server/analysis/pose.py`, `service/server/analysis/speed.py`, `docs/backend_integration_guide.md` | OpenCV fps/frame metadata가 `NaN/inf`일 때 응답에 비정상 숫자가 섞이지 않도록 finite/positive 값으로 정리 |
 | keypoints 숫자 방어 | `service/server/analysis/pose.py`, `docs/keypoints_csv_schema.md` | MediaPipe 좌표와 confidence가 `NaN/inf`일 때 CSV와 smoothing 좌표에 비정상 숫자가 전파되지 않도록 정리 |
 | 사용자/pro skeleton CSV 컬럼 스키마 확정 | `docs/keypoints_csv_schema.md`, `service/server/analysis/pose.py` | 실제 CSV 컬럼 생성 함수와 문서 스키마가 대응함 |
 | 후면 영상 기준 phase detection 고도화 | `service/server/analysis/phase.py`, `docs/scoring_policy.md` | keypoints 기반 v1 휴리스틱과 최소 길이 fallback 구현. exp08 strict 검증 통과 |
-| pelvis/torso/body-scale 기반 2D 공간 정규화 반영 | `service/server/analysis/normalization.py`, `docs/scoring_policy.md`, `service/server/app.py` | 분석용 body-frame 좌표 생성 구현, 문서화, 응답 진단 메타 포함 |
+| pelvis/torso/body-scale 기반 2D 공간 정규화 반영 | `service/server/analysis/normalization.py`, `docs/scoring_policy.md`, `service/server/app.py` | 분석용 body-frame 좌표 생성 구현 및 문서화 완료. 응답은 핵심 결과 필드로 축약 |
 | phase별 비교 feature와 관절 목록 확정 | `service/server/analysis/similarity.py`, `docs/scoring_policy.md` | phase별 관절 후보와 가중치가 구현/문서화됨 |
 | phase별 유사도 점수 계산식 구현 | `service/server/analysis/similarity.py` | 코사인 유사도 0~100 변환과 confidence 가중 평균 적용 |
 | `overallScore` 계산식 구현 | `service/server/analysis/similarity.py`, `docs/scoring_policy.md` | 유효 phase 가중 평균으로 계산됨 |
@@ -86,7 +86,7 @@
 | 1 | exp01~exp07 실험 기록 정리 | `experiments/exp01_pose_model` ~ `experiments/exp07_phase_direction`, `docs/experiment_history.md`, `results/summary.csv` | 완료. `exp07`은 기존 실행 산출물 경로 `outputs/exp6`와 실험 정리 번호를 문서에서 분리 설명 |
 | 2 | 사용자 skeleton CSV 응답 스키마 확정 | `docs/keypoints_csv_schema.md`, `service/server/analysis/pose.py`, `GET /api/schema`의 `keypointsCsvColumns` | 1차 완료 |
 | 3 | 후면 영상 기준 phase detection을 keypoints 기반으로 고도화 | `service/server/analysis/phase.py`, `docs/scoring_policy.md` | 최소 길이 fallback 보정까지 구현. exp08 strict 검증 통과 |
-| 4 | pelvis/torso/body-scale 기반 2D 공간 정규화를 유사도 계산에 반영 | `service/server/analysis/normalization.py`, `service/server/analysis/similarity.py`, `service/server/app.py` | 구현 및 응답 JSON 진단 메타 포함 완료 |
+| 4 | pelvis/torso/body-scale 기반 2D 공간 정규화를 유사도 계산에 반영 | `service/server/analysis/normalization.py`, `service/server/analysis/similarity.py`, `service/server/app.py` | 구현 완료. API 응답은 백엔드 저장용 핵심 필드로 축약 |
 | 5 | phase별 비교 feature와 관절 목록 확정 | `docs/scoring_policy.md`, `service/server/analysis/similarity.py` | 1차 완료 |
 | 6 | phase별 유사도 점수 계산식 정리 및 구현 | `docs/scoring_policy.md`, `service/server/analysis/similarity.py` | confidence 가중 평균까지 구현 완료 |
 | 7 | `overallScore` 계산식 정리 및 구현 | `docs/scoring_policy.md`, `service/server/analysis/similarity.py` | 유효 phase 가중 평균으로 구현 완료 |

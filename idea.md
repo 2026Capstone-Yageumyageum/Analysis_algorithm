@@ -79,4 +79,4 @@
 - 아이디어: `players[].phaseDetection` 또는 `diagnostics`에 phase별 탐지 근거, frame window, 최소 길이 보정 여부를 넣고, `normalization`에는 bodyScale, torso axis, throwingSide, mirror 여부를 넣습니다.
 - 기대 효과: 점수가 이상할 때 원인이 skeleton 품질인지 phase detection인지 정규화인지 빠르게 추적할 수 있습니다.
 - 리스크: 응답 크기와 계약 복잡도가 조금 늘어납니다.
-- 적용 상태: `service/server/app.py` 응답의 `players[]`에 `phaseDetection`과 `normalization`을 포함했습니다. `scripts/validate_pitch_analysis_response.py`에서도 해당 메타가 있으면 검증합니다.
+- 적용 상태: API 응답 계약을 단순화하면서 외부 응답에서는 제외했습니다. 진단 메타는 `analysis/similarity.py` 내부 결과로만 유지하고, 백엔드 저장 응답은 `analysisId`, `proId`, `overallScore`, `phaseScores` 중심으로 축약합니다.

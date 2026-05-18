@@ -126,12 +126,6 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 {
   "videoId": "user_video_001",
   "status": "completed",
-  "responseSchemaVersion": "pitch_analysis_response_v1",
-  "analysisType": "pro_similarity",
-  "pitchType": "직구",
-  "cameraView": "rear",
-  "algorithmName": "body_frame_phase_direction_vector_v1",
-  "scoreScale": "0~100",
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,...",
@@ -141,7 +135,6 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
   },
   "players": [
     {
-      "rank": 1,
       "analysisId": "analysis_1",
       "proId": "123123213",
       "overallScore": 82,
@@ -175,12 +168,6 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 | --- | --- | --- |
 | `video_id` | varchar | Python 응답의 `videoId` |
 | `user_id` | varchar | 사용자 ID |
-| `analysis_type` | varchar | `pro_similarity` |
-| `pitch_type` | varchar | 직구, 슬라이더 등 |
-| `camera_view` | varchar | 현재는 `rear` 고정 |
-| `response_schema_version` | varchar | Python 응답 스키마 버전 |
-| `algorithm_name` | varchar | 알고리즘 버전 |
-| `score_scale` | varchar | 현재는 `0~100` |
 | `players_json` | json/text | Python 응답의 Top 3 `players` 원문 |
 | `top_overall_score` | decimal | `players[0].overallScore` |
 | `top_pro_id` | varchar | `players[0].proId` |
@@ -203,7 +190,7 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
 | --- | --- | --- |
 | `analysis_id` | varchar | Python 응답의 `players[].analysisId` |
 | `video_id` | varchar | 사용자 영상 ID |
-| `rank` | integer | Top 3 순위 |
+| `rank` | integer | Top 3 순위. Python 응답 배열 순서에서 파생합니다. |
 | `pro_id` | varchar | reference model ID |
 | `overall_score` | decimal | 프로 skeleton과의 전체 유사도 |
 | `phase_scores_json` | json/text | `players[].phaseScores` 원문 |
@@ -221,7 +208,6 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
   "userSkeletonDataId": "user_skeleton_8f31d2a9",
   "players": [
     {
-      "rank": 1,
       "analysisId": "analysis_1",
       "proId": "123123213",
       "playerName": "류현진",

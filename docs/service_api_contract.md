@@ -135,7 +135,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `user_data.frame_count`: 사용자 영상 프레임 수
 - `user_data.fps`: 사용자 영상 FPS
 - `user_data.resolution`: 사용자 영상 해상도
-- `players`: 프로 skeleton 목록과 비교한 상위 3개 결과
+- `players`: 프로 skeleton 목록과 비교한 상위 3개 결과. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`만 포함합니다.
 
 응답 예시:
 
@@ -143,13 +143,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 {
   "videoId": "user_video_001",
   "status": "completed",
-  "responseSchemaVersion": "pitch_analysis_response_v1",
-  "analysisType": "pro_similarity",
-  "pitchType": "직구",
-  "cameraView": "rear",
-  "processedAt": "2026-05-05T15:30:00+09:00",
-  "algorithmName": "body_frame_phase_direction_vector_v1",
-  "scoreScale": "0~100",
   "user_data": {
     "skeleton_data_id": "user_skeleton_8f31d2a9",
     "skeleton_data": "frame_index,time_sec,nose_x,nose_y,...\n0,0.000,0.51,0.18,...",
@@ -159,7 +152,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
   },
   "players": [
     {
-      "rank": 1,
       "analysisId": "analysis_1",
       "proId": "123123213",
       "overallScore": 82,
@@ -176,7 +168,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
       ]
     },
     {
-      "rank": 2,
       "analysisId": "analysis_2",
       "proId": "123123214",
       "overallScore": 78,
@@ -193,7 +184,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
       ]
     },
     {
-      "rank": 3,
       "analysisId": "analysis_3",
       "proId": "123123215",
       "overallScore": 71,
@@ -216,12 +206,6 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 ## 백엔드 DB 저장 권장 필드
 
 - `videoId`
-- `analysisType`
-- `pitchType`
-- `cameraView`
-- `responseSchemaVersion`
-- `algorithmName`
-- `scoreScale`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
 - `user_data.frame_count`
@@ -232,12 +216,8 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
-- `players[].phaseDetection`: 사용자와 프로의 phase 대표 프레임, 구간, 경고
-- `players[].normalization`: 사용자와 프로의 body-frame 정규화 요약, 투구손, mirror 적용 여부
 
 `players`는 전체 프로 skeleton 목록 중 `overallScore` 기준 상위 3개입니다. 각 `players[].phaseScores`에는 phase별 유사도와 사용자/프로 시작-끝 프레임이 들어가므로, 프론트의 phase별 비교 화면과 결과 상세 화면에서 함께 사용할 수 있습니다.
-
-`players[].phaseDetection`과 `players[].normalization`은 디버깅 및 품질 표시용 진단 메타입니다. 백엔드가 모두 저장해도 되고, 서비스 화면에서는 phase 경계가 fallback 보정되었는지 확인하는 용도로 사용할 수 있습니다.
 
 프로 skeleton CSV는 백엔드 DB에 이미 저장되어 있고 Python 서버 메모리 캐시에 올라와 있으므로, 응답에 다시 포함하지 않는 것을 기본으로 합니다. 필요하면 디버깅용 옵션으로만 포함합니다.
 
@@ -267,7 +247,6 @@ Python 서버는 요청 검증 실패나 서버 내부 오류도 JSON 형태로 
   "userSkeletonDataId": "user_skeleton_8f31d2a9",
   "players": [
     {
-      "rank": 1,
       "analysisId": "analysis_1",
       "proId": "123123213",
       "overallScore": 82,

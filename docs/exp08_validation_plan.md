@@ -105,14 +105,12 @@ exp08_service_api_validation/
 | 필드 | 기대값 |
 | --- | --- |
 | `status` | `completed` |
-| `cameraView` | `rear` |
-| `algorithmName` | `body_frame_phase_direction_vector_v1` |
 | `user_data.skeleton_data` | `frame_index,time_sec,...`로 시작하는 CSV 문자열 |
 | `user_data.frame_count` | 사용자 영상 프레임 수 |
 | `user_data.fps` | 사용자 영상 FPS |
 | `user_data.resolution` | 예: `1920x1080` |
 | `players` | 최대 3개 |
-| `players[].rank` | 1~3 |
+| `players[].analysisId` | 분석 매칭 ID |
 | `players[].proId` | 캐시의 `pro_skeleton_data[].proId`와 매칭 |
 | `players[].overallScore` | 0~100 숫자 |
 | `players[].phaseScores[].score` | 0~100 숫자 |
@@ -153,7 +151,7 @@ python /Users/sonjiwoon/capstone/Analysis_algorithm/scripts/keypoints_csv_to_dis
 아래 조건을 모두 만족하면 exp08은 “서비스 API 연동 가능한 v1 후보”로 통과 처리합니다.
 
 - `user_data.skeleton_data`가 비어 있지 않고, `docs/keypoints_csv_schema.md`의 필수 컬럼을 포함합니다.
-- `players`가 최대 3개이며 `rank` 순서대로 정렬됩니다.
+- `players`가 최대 3개이며 `overallScore` 기준 내림차순으로 정렬됩니다.
 - `players[].overallScore`가 0~100 범위 숫자입니다.
 - `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 모두 존재합니다.
 - 각 phase에 사용자/프로 시작-끝 프레임이 존재합니다.

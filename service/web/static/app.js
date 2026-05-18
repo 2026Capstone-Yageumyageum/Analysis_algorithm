@@ -13,10 +13,10 @@ const schemaScoreScale = document.querySelector("#schema-score-scale");
 const schemaPhaseCount = document.querySelector("#schema-phase-count");
 const schemaColumnCount = document.querySelector("#schema-column-count");
 const overallScore = document.querySelector("#overall-score");
-const algorithmName = document.querySelector("#algorithm-name");
+const topProId = document.querySelector("#top-pro-id");
 const keypointsSize = document.querySelector("#keypoints-size");
 const poseStatus = document.querySelector("#pose-status");
-const userSpeed = document.querySelector("#user-speed");
+const videoSummary = document.querySelector("#video-summary");
 
 schemaButton.addEventListener("click", async () => {
   statusText.textContent = "스키마 확인 중";
@@ -95,10 +95,10 @@ form.addEventListener("submit", async (event) => {
     phasePanel.hidden = false;
     const topPlayer = payload.players?.[0];
     overallScore.textContent = topPlayer?.overallScore == null ? "-" : `${topPlayer.overallScore}`;
-    algorithmName.textContent = payload.algorithmName || "-";
+    topProId.textContent = topPlayer?.proId || "-";
     keypointsSize.textContent = formatCsvSize(payload.user_data?.skeleton_data);
     poseStatus.textContent = formatPoseStatus(payload);
-    userSpeed.textContent = formatSpeed(payload.speed?.user);
+    videoSummary.textContent = formatVideoSummary(payload.user_data);
     renderPhaseScores(topPlayer?.phaseScores || []);
   } catch (error) {
     statusText.textContent = "오류";
@@ -114,18 +114,20 @@ function optionalNumber(value) {
   return Number.isFinite(number) ? number : undefined;
 }
 
-function formatSpeed(result) {
-  if (!result || result.speedKmh == null) {
-    return "-";
-  }
-  return `${result.speedKmh} km/h`;
-}
-
 function formatCsvSize(csvText) {
   if (!csvText) {
     return "-";
   }
   return `${formatBytes(csvText.length)}`;
+}
+
+function formatVideoSummary(userData) {
+  if (!userData) {
+    return "-";
+  }
+  const frameCount = userData.frame_count ?? "-";
+  const fps = userData.fps == null ? "-" : Number(userData.fps).toFixed(2);
+  return `${frameCount} / ${fps}`;
 }
 
 function formatBytes(byteCount) {
@@ -146,7 +148,7 @@ function formatPoseStatus(payload) {
 
 function renderPhaseScores(phaseScores) {
   if (!phaseScores.length) {
-    phaseTableBody.innerHTML = `<tr><td colspan="6">phaseScores가 없습니다.</td></tr>`;
+    phaseTableBody.innerHTML = `<tr><td colspan="4">phaseScores가 없습니다.</td></tr>`;
     return;
   }
   phaseTableBody.innerHTML = phaseScores
@@ -158,10 +160,8 @@ function renderPhaseScores(phaseScores) {
         <tr>
           <td>${escapeHtml(phase.label || phase.phase || "-")}</td>
           <td>${score}</td>
-          <td>${escapeHtml(phase.status || "-")}</td>
           <td>${userFrames}</td>
           <td>${proFrames}</td>
-          <td>${phase.validJointCount ?? 0}</td>
         </tr>
       `;
     })

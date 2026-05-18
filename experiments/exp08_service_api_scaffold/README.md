@@ -37,13 +37,17 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 
 백엔드 저장용 응답에는 다음 값이 포함된다.
 
-- `analysisId`
-- `algorithmName`
+- `videoId`
+- `status`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
 - `user_data.frame_count`
 - `user_data.fps`
 - `user_data.resolution`
+- `players[].analysisId`
+- `players[].proId`
+- `players[].overallScore`
+- `players[].phaseScores`
 - `players`
 - `players[].overallScore`
 - `players[].phaseScores`
@@ -74,8 +78,7 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 - 사용자 영상은 446프레임, 60.025fps, 1080x1920 해상도로 분석되었다.
 - 첫 검증에서는 `stride` phase가 붕괴했지만, phase 최소 길이 guard와 fallback 확장 규칙을 적용한 뒤 strict 검증을 통과했다.
 - Top 1 류현진 비교 결과의 `overallScore`는 58.54로 반환되었다.
-- 모든 phase가 `ready` 상태로 반환되었다.
-- Top 1 player 응답에 `phaseDetection`과 `normalization` 진단 메타를 포함했다.
+- 모든 phase가 계산 가능 상태가 되었고, 외부 응답은 phase별 핵심 점수/프레임 필드만 반환하도록 축약했다.
 - 원본 영상은 검증 결과 폴더에 저장되지 않았다.
 
 ## 문제점
@@ -103,7 +106,7 @@ exp01~exp07에서 정리한 MediaPipe 2D 관절 좌표, pelvis/torso/body-scale 
 
 - 서비스 API v1 응답에는 반드시 사용자 `user_data.skeleton_data`를 포함한다.
 - 서비스 API v1 응답의 `players`에는 `overallScore` 기준 Top 3 비교 결과만 포함한다.
-- 응답 스키마 버전은 `pitch_analysis_response_v1`로 둔다.
+- 응답 스키마 버전과 알고리즘명은 `/api/schema`에서 확인하고, 분석 성공 응답에는 넣지 않는다.
 - 촬영 방향은 `rear`만 허용한다.
 - 원본 영상은 임시 처리 후 저장하지 않는다.
 - 후면 영상 기준 phase detection v1은 최소 길이 guard와 fallback 보정까지 포함한 v1 후보로 둔다.

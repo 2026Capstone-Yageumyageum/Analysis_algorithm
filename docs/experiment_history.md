@@ -157,7 +157,7 @@ exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Pyth
 - 분석 요청은 `userVideo`, `metadata`만 포함한 `multipart/form-data`로 받습니다.
 - 촬영 방향은 후면으로 고정하며, `metadata.cameraView`가 `rear`가 아니면 서버에서 거부합니다.
 - 원본 영상은 임시 처리 후 저장하지 않습니다.
-- 응답에는 `responseSchemaVersion`, `scoreScale`, `user_data.skeleton_data`, `players` Top 3 결과를 포함합니다.
+- 응답에는 `videoId`, `status`, `user_data`, `players` Top 3 결과만 포함합니다.
 - 백엔드는 사용자 `skeleton_data`를 DB에 저장하고, 프로 skeleton CSV는 별도 reference 데이터로 관리합니다.
 - 프론트에는 선택된 `players[].phaseScores`와 사용자/프로 skeleton CSV를 표시용 skeleton JSON으로 변환해서 내려주는 방향입니다.
 

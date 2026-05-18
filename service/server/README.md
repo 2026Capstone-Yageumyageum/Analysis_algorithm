@@ -15,6 +15,18 @@ python3.11 -m venv .venv
 
 기본 주소는 `http://127.0.0.1:5020` 입니다.
 
+Swagger 문서는 서버 실행 후 아래 주소에서 확인합니다.
+
+```text
+http://127.0.0.1:5020/api/docs
+```
+
+OpenAPI 원문은 아래 주소에서 확인할 수 있습니다.
+
+```text
+http://127.0.0.1:5020/api/openapi.yaml
+```
+
 ## 모듈 책임
 
 | 파일 | 책임 |
@@ -29,6 +41,14 @@ python3.11 -m venv .venv
 | `analysis/video.py` | 영상 fps, frameCount, width, height, duration 메타데이터 추출 |
 
 ## 주요 API
+
+### `GET /api/docs`
+
+Swagger UI 기반 API 문서 페이지를 보여줍니다. `docs/openapi.yaml`을 `/api/openapi.yaml`로 읽어 렌더링합니다.
+
+### `GET /api/openapi.yaml`
+
+OpenAPI YAML 원문을 반환합니다.
 
 ### `GET /api/schema`
 
@@ -82,15 +102,19 @@ python3.11 -m venv .venv
 -> overallScore 기준 Top 3 반환
 ```
 
-응답에는 백엔드 저장 편의를 위해 다음 값을 포함합니다.
+응답에는 백엔드 저장 편의를 위해 다음 값만 포함합니다.
 
-- `algorithmName`
+- `videoId`
+- `status`
 - `user_data.skeleton_data_id`
 - `user_data.skeleton_data`
+- `user_data.frame_count`
+- `user_data.fps`
+- `user_data.resolution`
+- `players[].analysisId`
+- `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
-- `players[].phaseDetection`
-- `players[].normalization`
 
 오류가 발생하면 백엔드가 처리하기 쉽도록 다음 JSON 형태로 반환합니다.
 

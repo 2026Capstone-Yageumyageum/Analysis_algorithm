@@ -20,7 +20,7 @@
 - `metadata.cameraView`가 비어 있거나 `rear`인 경우만 허용합니다.
 - `metadata.user`, `metadata.speed`는 값이 있을 경우 JSON object만 허용합니다.
 - 캐시 payload는 JSON array이며, 각 항목은 최소 `proId`, `skeleton_data`를 포함해야 합니다.
-- 성공 응답에는 `responseSchemaVersion`, `algorithmName`, `scoreScale`, `user_data`, `players`를 포함합니다.
+- 성공 응답에는 `videoId`, `status`, `user_data`, `players`만 포함합니다.
 - 오류 응답은 `status: error`, `error.code`, `error.message` 형태로 반환합니다.
 - MediaPipe Pose 실검증은 Python 3.11 환경에서 진행합니다.
 
@@ -31,7 +31,7 @@
 - 앱/프론트에서 받은 사용자 영상만 Python 서버 분석 요청으로 전달합니다.
 - Python 응답의 `status`가 `completed`이면 분석 결과를 저장합니다.
 - Python 응답의 `status`가 `error`이면 `error.code`, `error.message` 기준으로 재시도 안내를 만듭니다.
-- `pitch_analysis`에는 schema version, algorithm, score scale, Top 3 `players` 요약을 저장합니다.
+- `pitch_analysis`에는 Top 3 `players` 요약과 대표 점수를 저장합니다.
 - `pitch_user_skeleton`에는 `user_data.skeleton_data_id`, `user_data.skeleton_data`, frame count, fps, resolution을 저장합니다.
 - `pitch_analysis_player_match`에는 Top 3 `players[].analysisId`, `proId`, `overallScore`, `phaseScores`를 분리 저장합니다.
 - 프론트 조회용 API에서는 CSV 원문을 그대로 내려주지 말고 `displayKeypoints`로 변환해 내려줍니다.
@@ -52,12 +52,6 @@
 
 - `video_id`
 - `user_id`
-- `analysis_type`
-- `pitch_type`
-- `camera_view`
-- `response_schema_version`
-- `algorithm_name`
-- `score_scale`
 - `players_json`
 - `top_overall_score`
 - `top_pro_id`
@@ -85,8 +79,7 @@
 
 - Python 서버가 Python 3.11 환경에서 실행되는지 확인합니다.
 - 사용자 skeleton CSV가 placeholder가 아니라 MediaPipe Pose 기반 실제 관절 좌표로 생성됐는지 확인합니다.
-- `responseSchemaVersion`이 `pitch_analysis_response_v1`인지 확인합니다.
-- `cameraView`가 `rear`인지 확인합니다.
+- 응답 최상위 필드가 `videoId`, `status`, `user_data`, `players`만 있는지 확인합니다.
 - `user_data.skeleton_data`에 `frame_index`, `time_sec`, 관절 좌표, confidence 컬럼이 포함되는지 확인합니다.
 - `players`가 최대 3개이며 `overallScore` 기준으로 정렬되어 있는지 확인합니다.
 - `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 있는지 확인합니다.
