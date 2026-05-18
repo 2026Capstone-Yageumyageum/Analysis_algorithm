@@ -9,22 +9,34 @@ from pathlib import Path
 from typing import Any
 
 
-EXPECTED_SCHEMA_VERSION = "pitch_analysis_response_v1"
-EXPECTED_ALGORITHM = "body_frame_phase_direction_vector_v1"
 EXPECTED_PHASES = {"leg_lift", "stride", "release", "follow_through"}
-EXPECTED_REPRESENTATIVES = {"setup", "leg_lift", "stride", "release", "follow_through"}
 TOP_LEVEL_REQUIRED_FIELDS = {
     "videoId",
     "status",
-    "responseSchemaVersion",
-    "analysisType",
-    "pitchType",
-    "cameraView",
-    "processedAt",
-    "algorithmName",
-    "scoreScale",
     "user_data",
     "players",
+}
+USER_DATA_REQUIRED_FIELDS = {
+    "skeleton_data_id",
+    "skeleton_data",
+    "frame_count",
+    "fps",
+    "resolution",
+}
+PLAYER_REQUIRED_FIELDS = {
+    "analysisId",
+    "proId",
+    "overallScore",
+    "phaseScores",
+}
+PHASE_SCORE_REQUIRED_FIELDS = {
+    "phase",
+    "label",
+    "score",
+    "userStartFrame",
+    "userEndFrame",
+    "proStartFrame",
+    "proEndFrame",
 }
 JOINTS = (
     "nose",
@@ -77,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Fail when any phase score is not ready. Default only reports it as a warning.",
+        help="Kept for compatibility with older validation commands; the compact response contract is always strict.",
     )
     return parser.parse_args()
 
@@ -88,14 +100,6 @@ def validate_response(payload: dict[str, Any], *, strict: bool = False) -> dict[
 
     _validate_required_top_level(payload, errors)
     _expect(payload.get("status") == "completed", "status가 completed가 아닙니다.", errors)
-    _expect(
-        payload.get("responseSchemaVersion") == EXPECTED_SCHEMA_VERSION,
-        f"responseSchemaVersion이 {EXPECTED_SCHEMA_VERSION}가 아닙니다.",
-        errors,
-    )
-    _expect(payload.get("cameraView") == "rear", "cameraView가 rear가 아닙니다.", errors)
-    _expect(payload.get("algorithmName") == EXPECTED_ALGORITHM, "algorithmName이 예상 값과 다릅니다.", errors)
-    _expect(payload.get("scoreScale") == "0~100", "scoreScale이 0~100이 아닙니다.", errors)
     _expect(isinstance(payload.get("videoId"), str) and bool(payload.get("videoId")), "videoId가 비어 있습니다.", errors)
     _validate_user_data(payload.get("user_data"), errors)
     _validate_players(payload.get("players"), errors, warnings, strict=strict)
@@ -106,6 +110,7 @@ def validate_response(payload: dict[str, Any], *, strict: bool = False) -> dict[
 def _validate_required_top_level(payload: dict[str, Any], errors: list[str]) -> None:
     missing = TOP_LEVEL_REQUIRED_FIELDS.difference(payload)
     _expect(not missing, f"최상위 응답 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(payload, TOP_LEVEL_REQUIRED_FIELDS, "응답", errors)
 
 
 def _validate_overall_score(value: Any, errors: list[str]) -> None:
@@ -119,6 +124,9 @@ def _validate_user_data(value: Any, errors: list[str]) -> None:
     if not isinstance(value, dict):
         errors.append("user_data가 object가 아닙니다.")
         return
+    missing = USER_DATA_REQUIRED_FIELDS.difference(value)
+    _expect(not missing, f"user_data 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(value, USER_DATA_REQUIRED_FIELDS, "user_data", errors)
     _expect(isinstance(value.get("skeleton_data_id"), str), "user_data.skeleton_data_id가 문자열이 아닙니다.", errors)
     _expect(isinstance(value.get("frame_count"), int), "user_data.frame_count가 정수가 아닙니다.", errors)
     _expect(_is_finite_number(value.get("fps")), "user_data.fps가 유한한 숫자가 아닙니다.", errors)
@@ -136,7 +144,9 @@ def _validate_players(value: Any, errors: list[str], warnings: list[str], *, str
         if not isinstance(player, dict):
             errors.append(f"players[{index}]가 object가 아닙니다.")
             continue
-        _expect(player.get("rank") == index + 1, f"players[{index}].rank가 순서와 맞지 않습니다.", errors)
+        missing = PLAYER_REQUIRED_FIELDS.difference(player)
+        _expect(not missing, f"players[{index}] 필드 누락: {sorted(missing)}", errors)
+        _validate_no_extra_fields(player, PLAYER_REQUIRED_FIELDS, f"players[{index}]", errors)
         _expect(isinstance(player.get("analysisId"), str), f"players[{index}].analysisId가 문자열이 아닙니다.", errors)
         _expect(isinstance(player.get("proId"), str), f"players[{index}].proId가 문자열이 아닙니다.", errors)
         _validate_overall_score(player.get("overallScore"), errors)
@@ -146,67 +156,6 @@ def _validate_players(value: Any, errors: list[str], warnings: list[str], *, str
         if current_score is not None:
             previous_score = current_score
         _validate_phase_scores(player.get("phaseScores"), errors, warnings, strict=strict, path=f"players[{index}].phaseScores")
-        if "phaseDetection" in player:
-            _validate_phase_detection(player.get("phaseDetection"), errors)
-        if "normalization" in player:
-            _validate_normalization(player.get("normalization"), errors)
-
-
-def _validate_pose_meta(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("poseMeta가 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        meta = value.get(target)
-        if not isinstance(meta, dict):
-            errors.append(f"poseMeta.{target}가 없습니다.")
-            continue
-        _expect(meta.get("status") == "ready", f"poseMeta.{target}.status가 ready가 아닙니다.", errors)
-        _expect(
-            meta.get("poseModel") == "MediaPipe Pose",
-            f"poseMeta.{target}.poseModel이 MediaPipe Pose가 아닙니다.",
-            errors,
-        )
-
-
-def _validate_phase_detection(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("phaseDetection이 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        frames = ((value.get(target) or {}).get("representativeFrames") or {})
-        if not isinstance(frames, dict):
-            errors.append(f"phaseDetection.{target}.representativeFrames가 object가 아닙니다.")
-            continue
-        missing = EXPECTED_REPRESENTATIVES.difference(frames)
-        _expect(not missing, f"phaseDetection.{target}에 대표 프레임 누락: {sorted(missing)}", errors)
-        for phase_name in EXPECTED_REPRESENTATIVES.intersection(frames):
-            _expect(
-                isinstance(frames.get(phase_name), int),
-                f"phaseDetection.{target}.representativeFrames.{phase_name}가 정수 프레임이 아닙니다.",
-                errors,
-            )
-
-
-def _validate_normalization(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("normalization이 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        meta = value.get(target)
-        if not isinstance(meta, dict):
-            errors.append(f"normalization.{target}가 없습니다.")
-            continue
-        _expect(
-            meta.get("method") == "pelvis_torso_body_scale_2d_v1",
-            f"normalization.{target}.method가 예상 값과 다릅니다.",
-            errors,
-        )
-        _expect(
-            meta.get("throwingSide") in {"left", "right"},
-            f"normalization.{target}.throwingSide가 left/right가 아닙니다.",
-            errors,
-        )
 
 
 def _validate_phase_scores(
@@ -227,10 +176,9 @@ def _validate_phase_scores(
         if not isinstance(item, dict):
             errors.append(f"{path} 안에 object가 아닌 항목이 있습니다.")
             continue
-        status = item.get("status")
-        if status is not None and status != "ready":
-            message = f"{item.get('phase')} phase status가 ready가 아닙니다: {status}"
-            (errors if strict else warnings).append(message)
+        missing = PHASE_SCORE_REQUIRED_FIELDS.difference(item)
+        _expect(not missing, f"{path}.{item.get('phase')} 필드 누락: {sorted(missing)}", errors)
+        _validate_no_extra_fields(item, PHASE_SCORE_REQUIRED_FIELDS, f"{path}.{item.get('phase')}", errors)
         score = item.get("score")
         if score is not None:
             _expect(
@@ -240,65 +188,11 @@ def _validate_phase_scores(
             )
         for field_name in ("userStartFrame", "userEndFrame", "proStartFrame", "proEndFrame"):
             _expect(isinstance(item.get(field_name), int), f"{item.get('phase')} {field_name}가 정수가 아닙니다.", errors)
-        joint_scores = item.get("jointScores", [])
-        _expect(isinstance(joint_scores, list), f"{item.get('phase')} jointScores가 array가 아닙니다.", errors)
 
 
-def _validate_similarity(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("similarity가 object가 아닙니다.")
-        return
-    _expect(value.get("algorithmName") == EXPECTED_ALGORITHM, "similarity.algorithmName이 예상 값과 다릅니다.", errors)
-    _expect(value.get("scoreScale") == "0~100", "similarity.scoreScale이 0~100이 아닙니다.", errors)
-    _validate_overall_score(value.get("overallScore"), errors)
-    _validate_phase_scores(value.get("phaseScores"), errors, [], strict=False)
-
-
-def _validate_speed(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("speed가 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        result = value.get(target)
-        if not isinstance(result, dict):
-            errors.append(f"speed.{target}가 없습니다.")
-            continue
-        status = result.get("status")
-        _expect(isinstance(status, str) and bool(status), f"speed.{target}.status가 문자열이 아닙니다.", errors)
-        if status == "ready":
-            for field_name in (
-                "speedKmh",
-                "speedMps",
-                "releaseFrame",
-                "arrivalFrame",
-                "frameDelta",
-                "fps",
-                "targetDistanceM",
-                "releaseExtensionM",
-                "effectiveDistanceM",
-                "flightTimeSec",
-            ):
-                _expect(field_name in result, f"speed.{target}.{field_name}가 없습니다.", errors)
-            for field_name in ("speedKmh", "speedMps", "fps", "targetDistanceM", "releaseExtensionM", "effectiveDistanceM", "flightTimeSec"):
-                _expect(_is_finite_number(result.get(field_name)), f"speed.{target}.{field_name}가 유한한 숫자가 아닙니다.", errors)
-            for field_name in ("releaseFrame", "arrivalFrame", "frameDelta"):
-                _expect(isinstance(result.get(field_name), int), f"speed.{target}.{field_name}가 정수가 아닙니다.", errors)
-
-
-def _validate_video_meta(value: Any, errors: list[str]) -> None:
-    if not isinstance(value, dict):
-        errors.append("videoMeta가 object가 아닙니다.")
-        return
-    for target in ("user", "pro"):
-        meta = value.get(target)
-        if not isinstance(meta, dict):
-            errors.append(f"videoMeta.{target}가 없습니다.")
-            continue
-        _expect(isinstance(meta.get("videoId"), str), f"videoMeta.{target}.videoId가 문자열이 아닙니다.", errors)
-        for field_name in ("frameCount", "width", "height"):
-            _expect(isinstance(meta.get(field_name), int), f"videoMeta.{target}.{field_name}가 정수가 아닙니다.", errors)
-        for field_name in ("fps", "durationSec"):
-            _expect(_is_finite_number(meta.get(field_name)), f"videoMeta.{target}.{field_name}가 유한한 숫자가 아닙니다.", errors)
+def _validate_no_extra_fields(value: dict[str, Any], allowed_fields: set[str], path: str, errors: list[str]) -> None:
+    extra = set(value).difference(allowed_fields)
+    _expect(not extra, f"{path}에 계약 외 필드가 있습니다: {sorted(extra)}", errors)
 
 
 def _validate_keypoints_csv(value: Any, path: str, errors: list[str]) -> None:

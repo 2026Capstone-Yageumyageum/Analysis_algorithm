@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import HTTPException, ServiceUnavailable
 from werkzeug.utils import secure_filename
@@ -21,12 +20,23 @@ from analysis.video import inspect_video
 
 SERVER_ROOT = Path(__file__).resolve().parent
 INTEGRATED_ROOT = SERVER_ROOT.parent
+PROJECT_ROOT = INTEGRATED_ROOT.parent
 WEB_ROOT = INTEGRATED_ROOT / "web"
+OPENAPI_SPEC_PATH = PROJECT_ROOT / "docs" / "openapi.yaml"
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".m4v"}
 SUPPORTED_CAMERA_VIEW = "rear"
 RESPONSE_SCHEMA_VERSION = "pitch_analysis_response_v1"
 SIMILARITY_ALGORITHM_NAME = "body_frame_phase_direction_vector_v1"
 SCORE_SCALE = "0~100"
+PUBLIC_PHASE_SCORE_FIELDS = (
+    "phase",
+    "label",
+    "score",
+    "userStartFrame",
+    "userEndFrame",
+    "proStartFrame",
+    "proEndFrame",
+)
 
 app = Flask(
     __name__,
@@ -35,6 +45,7 @@ app = Flask(
 )
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024
 app.config["SECRET_KEY"] = "integrated-local-dev"
+app.json.sort_keys = False
 
 
 @app.get("/")
@@ -45,6 +56,43 @@ def index():
 @app.get("/api/health")
 def health():
     return jsonify({"status": "ok", "service": "integrated-pitch-analysis"})
+
+
+@app.get("/api/docs")
+def swagger_docs():
+    html = """<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Integrated Pitch Analysis API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #f7f4ec; }
+    .swagger-ui .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.addEventListener("load", () => {
+      window.ui = SwaggerUIBundle({
+        url: "/api/openapi.yaml",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis],
+        layout: "BaseLayout"
+      });
+    });
+  </script>
+</body>
+</html>"""
+    return Response(html, mimetype="text/html")
+
+
+@app.get("/api/openapi.yaml")
+def openapi_yaml():
+    return send_file(OPENAPI_SPEC_PATH, mimetype="application/yaml")
 
 
 @app.get("/api/schema")
@@ -122,13 +170,6 @@ def analyze_similarity():
         {
             "videoId": video_id,
             "status": "completed",
-            "responseSchemaVersion": RESPONSE_SCHEMA_VERSION,
-            "analysisType": metadata.get("analysisType") or "pro_similarity",
-            "pitchType": metadata.get("pitchType") or "직구",
-            "cameraView": SUPPORTED_CAMERA_VIEW,
-            "processedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "algorithmName": SIMILARITY_ALGORITHM_NAME,
-            "scoreScale": SCORE_SCALE,
             "user_data": {
                 "skeleton_data_id": skeleton_data_id,
                 "skeleton_data": user_csv_text,
@@ -224,36 +265,32 @@ def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, A
             {
                 "analysisId": item.get("analysisId") or item.get("analysis_id"),
                 "proId": item["proId"],
-                "playerName": item.get("playerName") or item.get("player_name"),
-                "skeletonDataId": item.get("skeletonDataId") or item.get("skeleton_data_id"),
                 "overallScore": similarity.get("overallScore"),
                 "phaseScores": similarity.get("phaseScores", []),
-                "phaseDetection": similarity.get("phaseDetection", {}),
-                "normalization": similarity.get("normalization", {}),
-                "similarityStatus": similarity.get("status"),
             }
         )
 
     sorted_matches = sorted(matches, key=_match_sort_key, reverse=True)[:3]
     players: list[dict[str, Any]] = []
-    for rank, match in enumerate(sorted_matches, start=1):
+    for index, match in enumerate(sorted_matches, start=1):
         player = {
-            "rank": rank,
-            "analysisId": str(match.get("analysisId") or f"analysis_{rank}"),
-            "proId": match["proId"],
+            "analysisId": str(match.get("analysisId") or f"analysis_{index}"),
+            "proId": str(match["proId"]),
             "overallScore": match["overallScore"],
-            "phaseScores": match["phaseScores"],
-            "phaseDetection": match.get("phaseDetection", {}),
-            "normalization": match.get("normalization", {}),
+            "phaseScores": _compact_phase_scores(match.get("phaseScores")),
         }
-        if match.get("playerName"):
-            player["playerName"] = match["playerName"]
-        if match.get("skeletonDataId"):
-            player["skeletonDataId"] = match["skeletonDataId"]
-        if match.get("similarityStatus"):
-            player["similarityStatus"] = match["similarityStatus"]
         players.append(player)
     return players
+
+
+def _compact_phase_scores(phase_scores: Any) -> list[dict[str, Any]]:
+    if not isinstance(phase_scores, list):
+        return []
+    return [_compact_phase_score(item) for item in phase_scores if isinstance(item, dict)]
+
+
+def _compact_phase_score(phase_score: dict[str, Any]) -> dict[str, Any]:
+    return {field_name: phase_score.get(field_name) for field_name in PUBLIC_PHASE_SCORE_FIELDS}
 
 
 def _match_sort_key(match: dict[str, Any]) -> float:
