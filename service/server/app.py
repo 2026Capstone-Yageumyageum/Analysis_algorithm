@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from werkzeug.utils import secure_filename
 
 from analysis.pro_cache import cache_status, get_cached_pro_skeletons, refresh_pro_skeleton_cache
 from analysis.pose import CSV_COLUMNS, extract_skeleton_data_csv_text
+from analysis.resampling_preview import build_resampling_preview, build_resampling_preview_from_csv_text
 from analysis.similarity import compute_similarity
 from analysis.speed import compute_tof_speed
 from analysis.video import inspect_video
@@ -23,10 +25,17 @@ INTEGRATED_ROOT = SERVER_ROOT.parent
 PROJECT_ROOT = INTEGRATED_ROOT.parent
 WEB_ROOT = INTEGRATED_ROOT / "web"
 OPENAPI_SPEC_PATH = PROJECT_ROOT / "docs" / "openapi.yaml"
+CAPSTONE_ROOT = PROJECT_ROOT.parent
+PRO_VIDEO_DIR = CAPSTONE_ROOT / "pro_data"
+USER_VIDEO_DIR = CAPSTONE_ROOT / "user_data"
+DEFAULT_RESAMPLING_PRO_KEYPOINTS = PROJECT_ROOT / "outputs" / "exp6" / "pro" / "keypoints.csv"
+DEFAULT_RESAMPLING_USER_KEYPOINTS = PROJECT_ROOT / "outputs" / "exp6" / "user" / "keypoints.csv"
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".m4v"}
+PREVIEW_VIDEO_LIMIT = 20
+PREVIEW_ANALYSIS_MIN_FRAMES = 360
 SUPPORTED_CAMERA_VIEW = "rear"
 RESPONSE_SCHEMA_VERSION = "pitch_analysis_response_v1"
-SIMILARITY_ALGORITHM_NAME = "body_frame_phase_direction_vector_v1"
+SIMILARITY_ALGORITHM_NAME = "fixed_step_pose_resampling_v1"
 SCORE_SCALE = "0~100"
 PUBLIC_PHASE_SCORE_FIELDS = (
     "phase",
@@ -105,7 +114,12 @@ def schema():
             "similarity": {
                 "algorithmName": SIMILARITY_ALGORITHM_NAME,
                 "scoreScale": SCORE_SCALE,
-                "phases": ["leg_lift", "stride", "release", "follow_through"],
+                "phases": ["windup", "leg_lift", "stride", "acceleration", "follow_through"],
+                "releaseDetection": {
+                    "default": "나가기 전 프레임과 나간 프레임의 중간값",
+                    "currentFallback": "공 탐지 실패 시 손목 기반 proxy midpoint",
+                    "plannedSubFrameCorrection": "손목-공 거리 threshold crossing",
+                },
             },
             "request": {
                 "similarity": {
@@ -141,6 +155,104 @@ def refresh_pro_skeletons():
     return jsonify(refresh_pro_skeleton_cache())
 
 
+@app.get("/api/experiments/video-options")
+def experiment_video_options():
+    return jsonify(
+        {
+            "status": "ok",
+            "limit": PREVIEW_VIDEO_LIMIT,
+            "directories": {
+                "pro": str(PRO_VIDEO_DIR),
+                "user": str(USER_VIDEO_DIR),
+            },
+            "proVideos": _video_options(PRO_VIDEO_DIR, limit=PREVIEW_VIDEO_LIMIT),
+            "userVideos": _video_options(
+                USER_VIDEO_DIR,
+                limit=PREVIEW_VIDEO_LIMIT,
+                preferred_names=("y1.mp4", "y2.mp4", "y3.mp4", "i1.mp4", "i2.mp4", "i3.mp4", "i4.mp4", "i5.mp4"),
+            ),
+        }
+    )
+
+
+@app.get("/api/experiments/resampling-preview")
+def resampling_preview():
+    return jsonify(
+        build_resampling_preview(
+            pro_keypoints_path=DEFAULT_RESAMPLING_PRO_KEYPOINTS,
+            user_keypoints_path=DEFAULT_RESAMPLING_USER_KEYPOINTS,
+        )
+    )
+
+
+@app.post("/api/experiments/resampling-preview")
+def uploaded_resampling_preview():
+    pro_upload = _optional_file("proVideo")
+    user_upload = _optional_file("userVideo")
+    pro_selected_path = _selected_video_path("proVideoOption", PRO_VIDEO_DIR)
+    user_selected_path = _selected_video_path("userVideoOption", USER_VIDEO_DIR)
+    metadata = _parse_metadata()
+    requested_max_frames = _parse_optional_int(metadata.get("maxFrames") or request.form.get("maxFrames"))
+    analysis_max_frames = _preview_analysis_max_frames(requested_max_frames)
+    if pro_upload is None and pro_selected_path is None:
+        raise ValueError("선수 영상 업로드 또는 pro_data 영상 선택이 필요합니다.")
+    if user_upload is None and user_selected_path is None:
+        raise ValueError("사용자 영상 업로드 또는 user_data 영상 선택이 필요합니다.")
+
+    pro_source = _preview_source(upload=pro_upload, selected_path=pro_selected_path, folder_label="pro_data")
+    user_source = _preview_source(upload=user_upload, selected_path=user_selected_path, folder_label="user_data")
+
+    with tempfile.TemporaryDirectory(prefix="resampling_preview_") as tmp_dir_name:
+        tmp_dir = Path(tmp_dir_name)
+        pro_path = _save_temp_upload(pro_upload, tmp_dir, "pro") if pro_upload else pro_selected_path
+        user_path = _save_temp_upload(user_upload, tmp_dir, "user") if user_upload else user_selected_path
+        if pro_path is None or user_path is None:
+            raise ValueError("미리보기 영상 경로를 확인하지 못했습니다.")
+
+        pro_meta = inspect_video(pro_path)
+        user_meta = inspect_video(user_path)
+        pro_csv_text, pro_pose_meta = extract_skeleton_data_csv_text(
+            pro_path,
+            max_frames=analysis_max_frames,
+            sample_evenly=True,
+        )
+        user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(
+            user_path,
+            max_frames=analysis_max_frames,
+            sample_evenly=True,
+        )
+
+        payload = build_resampling_preview_from_csv_text(
+            pro_csv_text=pro_csv_text,
+            user_csv_text=user_csv_text,
+            sources={
+                "mode": _preview_mode(pro_source, user_source),
+                "proVideo": pro_source["name"],
+                "userVideo": user_source["name"],
+                "proSource": pro_source["source"],
+                "userSource": user_source["source"],
+            },
+            video_paths={
+                "pro": pro_path,
+                "user": user_path,
+            },
+        )
+    payload["videoMeta"] = {
+        "pro": pro_meta,
+        "user": user_meta,
+    }
+    payload["poseMeta"] = {
+        "pro": pro_pose_meta,
+        "user": user_pose_meta,
+    }
+    payload["previewFrameLimit"] = {
+        "requestedMaxFrames": requested_max_frames,
+        "analysisMaxFrames": analysis_max_frames,
+        "minimumAnalysisFrames": PREVIEW_ANALYSIS_MIN_FRAMES,
+    }
+    return jsonify(payload)
+
+
 @app.post("/api/analyze/similarity")
 def analyze_similarity():
     user_upload = _required_file("userVideo")
@@ -164,7 +276,7 @@ def analyze_similarity():
         user_meta = inspect_video(user_path)
         max_frames = _parse_optional_int(metadata.get("maxFrames"))
         user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(user_path, max_frames=max_frames)
-        players = _rank_player_matches(user_csv_text, pro_skeleton_data)
+        players = _rank_player_matches(user_csv_text, pro_skeleton_data, user_video_path=user_path)
 
     return jsonify(
         {
@@ -200,9 +312,16 @@ def measure_speed():
 
 
 def _required_file(field_name: str) -> FileStorage:
+    upload = _optional_file(field_name)
+    if upload is None:
+        raise ValueError(f"{field_name} 파일이 필요합니다.")
+    return upload
+
+
+def _optional_file(field_name: str) -> FileStorage | None:
     upload = request.files.get(field_name)
     if upload is None or not upload.filename:
-        raise ValueError(f"{field_name} 파일이 필요합니다.")
+        return None
     if Path(upload.filename).suffix.lower() not in ALLOWED_EXTENSIONS:
         raise ValueError(f"{field_name}은 mp4/mov/avi/m4v만 지원합니다.")
     return upload
@@ -214,6 +333,75 @@ def _save_temp_upload(upload: FileStorage, tmp_dir: Path, prefix: str) -> Path:
     target_path = tmp_dir / f"{prefix}_{uuid4().hex[:8]}{suffix}"
     upload.save(target_path)
     return target_path
+
+
+def _video_options(directory: Path, *, limit: int, preferred_names: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    if not directory.exists():
+        return []
+    videos = [
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS
+    ]
+    preferred_order = {name: index for index, name in enumerate(preferred_names)}
+    videos.sort(key=lambda path: (preferred_order.get(path.name, len(preferred_order)), _natural_sort_key(path.name)))
+    return [
+        {
+            "id": path.name,
+            "filename": path.name,
+            "label": path.stem,
+            "sizeBytes": path.stat().st_size,
+        }
+        for path in videos[:limit]
+    ]
+
+
+def _natural_sort_key(value: str) -> list[Any]:
+    parts = re.split(r"(\d+)", value.lower())
+    return [int(part) if part.isdigit() else part for part in parts]
+
+
+def _selected_video_path(field_name: str, directory: Path) -> Path | None:
+    selected_name = str(request.form.get(field_name) or "").strip()
+    if not selected_name:
+        return None
+    if Path(selected_name).name != selected_name:
+        raise ValueError(f"{field_name} 값은 파일명만 허용합니다.")
+    candidate = (directory / selected_name).resolve()
+    base = directory.resolve()
+    if not candidate.is_relative_to(base) or not candidate.exists() or not candidate.is_file():
+        raise ValueError(f"{field_name} 영상이 폴더 안에 없습니다.")
+    if candidate.suffix.lower() not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"{field_name}은 mp4/mov/avi/m4v만 지원합니다.")
+    return candidate
+
+
+def _preview_source(*, upload: FileStorage | None, selected_path: Path | None, folder_label: str) -> dict[str, str]:
+    if upload is not None:
+        return {
+            "source": "upload",
+            "name": secure_filename(upload.filename or "video") or "video",
+        }
+    if selected_path is not None:
+        return {
+            "source": folder_label,
+            "name": selected_path.name,
+        }
+    return {"source": "unknown", "name": "unknown"}
+
+
+def _preview_mode(pro_source: dict[str, str], user_source: dict[str, str]) -> str:
+    if pro_source["source"] == "upload" and user_source["source"] == "upload":
+        return "uploaded_videos"
+    if pro_source["source"] != "upload" and user_source["source"] != "upload":
+        return "folder_videos"
+    return "mixed_videos"
+
+
+def _preview_analysis_max_frames(requested_max_frames: int | None) -> int | None:
+    if requested_max_frames is None:
+        return None
+    return max(requested_max_frames, PREVIEW_ANALYSIS_MIN_FRAMES)
 
 
 def _parse_metadata() -> dict:
@@ -257,16 +445,23 @@ def _parse_optional_int(value) -> int | None:
     return parsed if parsed > 0 else None
 
 
-def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _rank_player_matches(
+    user_csv_text: str,
+    pro_skeleton_data: list[dict[str, Any]],
+    *,
+    user_video_path: Path | None = None,
+) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     for item in pro_skeleton_data:
-        similarity = compute_similarity(user_csv_text, item["skeleton_data"])
+        similarity = compute_similarity(user_csv_text, item["skeleton_data"], user_video_path=user_video_path)
         matches.append(
             {
                 "analysisId": item.get("analysisId") or item.get("analysis_id"),
                 "proId": item["proId"],
                 "overallScore": similarity.get("overallScore"),
                 "phaseScores": similarity.get("phaseScores", []),
+                "release": similarity.get("release", {}),
+                "feedback": similarity.get("feedback", {"good": [], "bad": []}),
             }
         )
 
@@ -278,6 +473,8 @@ def _rank_player_matches(user_csv_text: str, pro_skeleton_data: list[dict[str, A
             "proId": str(match["proId"]),
             "overallScore": match["overallScore"],
             "phaseScores": _compact_phase_scores(match.get("phaseScores")),
+            "release": _compact_release(match.get("release")),
+            "feedback": _compact_feedback(match.get("feedback")),
         }
         players.append(player)
     return players
@@ -291,6 +488,87 @@ def _compact_phase_scores(phase_scores: Any) -> list[dict[str, Any]]:
 
 def _compact_phase_score(phase_score: dict[str, Any]) -> dict[str, Any]:
     return {field_name: phase_score.get(field_name) for field_name in PUBLIC_PHASE_SCORE_FIELDS}
+
+
+def _compact_release(release: Any) -> dict[str, Any]:
+    if not isinstance(release, dict):
+        release = {}
+    return {
+        "proFrame": release.get("proFrame"),
+        "userFrame": release.get("userFrame"),
+        "pro": _compact_release_event(release.get("pro")),
+        "user": _compact_release_event(release.get("user")),
+        "timing": _compact_release_timing(release.get("timing")),
+        "point": _compact_release_point(release.get("point")),
+    }
+
+
+def _compact_release_event(event: Any) -> dict[str, Any]:
+    if not isinstance(event, dict):
+        return {
+            "frame": None,
+            "beforeFrame": None,
+            "exitFrame": None,
+            "method": "unknown",
+            "status": "unknown",
+            "source": "unknown",
+        }
+    return {
+        "frame": event.get("frame"),
+        "beforeFrame": event.get("beforeFrame"),
+        "exitFrame": event.get("exitFrame"),
+        "method": str(event.get("method") or "unknown"),
+        "status": str(event.get("status") or "unknown"),
+        "source": str(event.get("source") or "unknown"),
+    }
+
+
+def _compact_release_timing(timing: Any) -> dict[str, Any]:
+    if not isinstance(timing, dict):
+        timing = {}
+    return {
+        "proPitchPercent": timing.get("proPitchPercent"),
+        "userPitchPercent": timing.get("userPitchPercent"),
+        "differencePercent": timing.get("differencePercent"),
+        "message": str(timing.get("message") or "릴리즈 타이밍을 계산하지 못했습니다."),
+    }
+
+
+def _compact_release_point(point: Any) -> dict[str, Any]:
+    if not isinstance(point, dict):
+        point = {}
+    return {
+        "difference": point.get("difference"),
+        "heightDifference": point.get("heightDifference"),
+        "sideDifference": point.get("sideDifference"),
+        "message": str(point.get("message") or "릴리즈 포인트를 계산하지 못했습니다."),
+    }
+
+
+def _compact_feedback(feedback: Any) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(feedback, dict):
+        return {"good": [], "bad": []}
+    return {
+        "good": _compact_feedback_items(feedback.get("good")),
+        "bad": _compact_feedback_items(feedback.get("bad")),
+    }
+
+
+def _compact_feedback_items(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    compacted = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        compacted.append(
+            {
+                "phase": item.get("phase"),
+                "message": item.get("message"),
+                "evidence": item.get("evidence") if isinstance(item.get("evidence"), dict) else {},
+            }
+        )
+    return compacted
 
 
 def _match_sort_key(match: dict[str, Any]) -> float:

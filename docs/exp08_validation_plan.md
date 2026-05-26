@@ -153,7 +153,7 @@ python /Users/sonjiwoon/capstone/Analysis_algorithm/scripts/keypoints_csv_to_dis
 - `user_data.skeleton_data`가 비어 있지 않고, `docs/keypoints_csv_schema.md`의 필수 컬럼을 포함합니다.
 - `players`가 최대 3개이며 `overallScore` 기준 내림차순으로 정렬됩니다.
 - `players[].overallScore`가 0~100 범위 숫자입니다.
-- `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 모두 존재합니다.
+- `players[].phaseScores`에 `windup`, `leg_lift`, `stride`, `acceleration`, `follow_through`가 모두 존재합니다.
 - 각 phase에 사용자/프로 시작-끝 프레임이 존재합니다.
 - 서버 실행 후 결과 폴더나 업로드 영상 파일이 장기 저장되지 않습니다.
 

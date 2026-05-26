@@ -65,7 +65,7 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
     pelvis_y = _midpoint(keypoints_df["left_hip_y_smooth"], keypoints_df["right_hip_y_smooth"])
     shoulder_x = _midpoint(keypoints_df["left_shoulder_x_smooth"], keypoints_df["right_shoulder_x_smooth"])
     shoulder_y = _midpoint(keypoints_df["left_shoulder_y_smooth"], keypoints_df["right_shoulder_y_smooth"])
-    body_scale = _build_body_scale(keypoints_df, pelvis_x, pelvis_y, shoulder_x, shoulder_y)
+    raw_body_scale, body_scale, scale_summary = _build_body_scale(keypoints_df, pelvis_x, pelvis_y, shoulder_x, shoulder_y)
     throwing_side = infer_throwing_side(keypoints_df)
     stride_side = "left" if throwing_side == "right" else "right"
     mirror_x = throwing_side == "left"
@@ -75,6 +75,7 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
     table["pelvis_center_y"] = pelvis_y
     table["shoulder_center_x"] = shoulder_x
     table["shoulder_center_y"] = shoulder_y
+    table["raw_body_scale"] = raw_body_scale
     table["body_scale"] = body_scale
     table["throwing_side"] = throwing_side
     table["stride_side"] = stride_side
@@ -86,6 +87,8 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
             warnings.append(f"{joint} smooth 좌표가 없어 분석 좌표에서 제외했습니다.")
             continue
 
+        table[f"{joint}_image_x"] = pd.to_numeric(keypoints_df[x_col], errors="coerce").interpolate(limit_direction="both")
+        table[f"{joint}_image_y"] = pd.to_numeric(keypoints_df[y_col], errors="coerce").interpolate(limit_direction="both")
         body_x, body_y = _project_to_body_frame(
             point_x=keypoints_df[x_col],
             point_y=keypoints_df[y_col],
@@ -116,10 +119,11 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
         table=table,
         summary={
             "status": "ready",
-            "method": "pelvis_torso_body_scale_2d_v1",
+            "method": "pelvis_stable_body_scale_2d_v2",
             "throwingSide": throwing_side,
             "strideSide": stride_side,
-            "medianBodyScale": None if valid_scale.empty else round(float(valid_scale.median()), 6),
+            "medianBodyScale": scale_summary.get("stableScale"),
+            "scalePolicy": scale_summary,
             "coordinateSystem": "pelvis-centered torso-axis body-scale units",
             "mirrorApplied": mirror_x,
         },
@@ -128,9 +132,120 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
 
 
 def infer_throwing_side(keypoints_df: pd.DataFrame) -> str:
+    left_activity = _throwing_arm_activity_score(keypoints_df, "left")
+    right_activity = _throwing_arm_activity_score(keypoints_df, "right")
+    left_position = _throwing_arm_position_score(keypoints_df, "left")
+    right_position = _throwing_arm_position_score(keypoints_df, "right")
     left_motion = _joint_total_motion(keypoints_df, "left_wrist")
     right_motion = _joint_total_motion(keypoints_df, "right_wrist")
-    return "left" if left_motion > right_motion else "right"
+
+    left_score = (
+        0.55 * _relative_score(left_activity, left_activity, right_activity)
+        + 0.25 * _relative_score(left_position, left_position, right_position)
+        + 0.20 * _relative_score(left_motion, left_motion, right_motion)
+    )
+    right_score = (
+        0.55 * _relative_score(right_activity, left_activity, right_activity)
+        + 0.25 * _relative_score(right_position, left_position, right_position)
+        + 0.20 * _relative_score(right_motion, left_motion, right_motion)
+    )
+    return "left" if left_score > right_score else "right"
+
+
+def _throwing_arm_position_score(keypoints_df: pd.DataFrame, side: str) -> float:
+    required_columns = [
+        f"{side}_shoulder_x_smooth",
+        f"{side}_shoulder_y_smooth",
+        f"{side}_elbow_x_smooth",
+        f"{side}_elbow_y_smooth",
+        f"{side}_wrist_x_smooth",
+        f"{side}_wrist_y_smooth",
+        f"{side}_shoulder_confidence",
+        f"{side}_elbow_confidence",
+        f"{side}_wrist_confidence",
+        "left_hip_x_smooth",
+        "left_hip_y_smooth",
+        "right_hip_x_smooth",
+        "right_hip_y_smooth",
+    ]
+    if keypoints_df.empty or any(column not in keypoints_df.columns for column in required_columns):
+        return 0.0
+
+    shoulder_x = _numeric_column(keypoints_df, f"{side}_shoulder_x_smooth")
+    shoulder_y = _numeric_column(keypoints_df, f"{side}_shoulder_y_smooth")
+    elbow_x = _numeric_column(keypoints_df, f"{side}_elbow_x_smooth")
+    elbow_y = _numeric_column(keypoints_df, f"{side}_elbow_y_smooth")
+    wrist_x = _numeric_column(keypoints_df, f"{side}_wrist_x_smooth")
+    wrist_y = _numeric_column(keypoints_df, f"{side}_wrist_y_smooth")
+    pelvis_x = _midpoint(keypoints_df["left_hip_x_smooth"], keypoints_df["right_hip_x_smooth"])
+    pelvis_y = _midpoint(keypoints_df["left_hip_y_smooth"], keypoints_df["right_hip_y_smooth"])
+    confidence = _joint_chain_confidence(keypoints_df, side)
+
+    score = (
+        np.hypot(wrist_x - shoulder_x, wrist_y - shoulder_y) * 0.45
+        + np.hypot(wrist_x - pelvis_x, wrist_y - pelvis_y) * 0.30
+        + np.hypot(wrist_x - elbow_x, wrist_y - elbow_y) * 0.15
+        + (wrist_x - pelvis_x).abs() * 0.10
+    ) * confidence
+    focused = pd.Series(score, index=keypoints_df.index).iloc[
+        int(len(keypoints_df) * 0.15) : max(1, int(len(keypoints_df) * 0.95))
+    ].dropna()
+    if focused.empty:
+        return 0.0
+    return float(focused.nlargest(max(4, min(10, len(focused)))).mean())
+
+
+def _throwing_arm_activity_score(keypoints_df: pd.DataFrame, side: str) -> float:
+    required_columns = [
+        f"{side}_shoulder_x_smooth",
+        f"{side}_shoulder_y_smooth",
+        f"{side}_elbow_x_smooth",
+        f"{side}_elbow_y_smooth",
+        f"{side}_wrist_x_smooth",
+        f"{side}_wrist_y_smooth",
+        f"{side}_shoulder_confidence",
+        f"{side}_elbow_confidence",
+        f"{side}_wrist_confidence",
+    ]
+    if keypoints_df.empty or any(column not in keypoints_df.columns for column in required_columns):
+        return 0.0
+
+    shoulder_x = _numeric_column(keypoints_df, f"{side}_shoulder_x_smooth")
+    shoulder_y = _numeric_column(keypoints_df, f"{side}_shoulder_y_smooth")
+    elbow_x = _numeric_column(keypoints_df, f"{side}_elbow_x_smooth")
+    elbow_y = _numeric_column(keypoints_df, f"{side}_elbow_y_smooth")
+    wrist_x = _numeric_column(keypoints_df, f"{side}_wrist_x_smooth")
+    wrist_y = _numeric_column(keypoints_df, f"{side}_wrist_y_smooth")
+    confidence = _joint_chain_confidence(keypoints_df, side)
+
+    score = (
+        np.hypot(wrist_x - shoulder_x, wrist_y - shoulder_y) * 0.70
+        + np.hypot(wrist_x - elbow_x, wrist_y - elbow_y) * 0.30
+    ) * confidence
+    early_score = pd.Series(score, index=keypoints_df.index).iloc[: max(1, int(len(keypoints_df) * 0.70))].dropna()
+    if early_score.empty:
+        return 0.0
+    return float(early_score.nlargest(max(3, min(8, len(early_score)))).mean())
+
+
+def _joint_chain_confidence(keypoints_df: pd.DataFrame, side: str) -> pd.Series:
+    return (
+        _numeric_column(keypoints_df, f"{side}_wrist_confidence", fallback=0.0)
+        * _numeric_column(keypoints_df, f"{side}_elbow_confidence", fallback=0.0)
+        * _numeric_column(keypoints_df, f"{side}_shoulder_confidence", fallback=0.0)
+    ).fillna(0.0)
+
+
+def _numeric_column(keypoints_df: pd.DataFrame, column: str, fallback: float | None = None) -> pd.Series:
+    series = pd.to_numeric(keypoints_df[column], errors="coerce")
+    if fallback is not None:
+        return series.fillna(fallback)
+    return series.interpolate(limit_direction="both")
+
+
+def _relative_score(value: float, left_value: float, right_value: float) -> float:
+    denominator = max(abs(left_value), abs(right_value), 1e-9)
+    return float(value / denominator)
 
 
 def _joint_total_motion(keypoints_df: pd.DataFrame, joint: str) -> float:
@@ -151,7 +266,7 @@ def _build_body_scale(
     pelvis_y: pd.Series,
     shoulder_x: pd.Series,
     shoulder_y: pd.Series,
-) -> pd.Series:
+) -> tuple[pd.Series, pd.Series, dict[str, Any]]:
     torso = _distance(shoulder_x, shoulder_y, pelvis_x, pelvis_y)
     shoulder_width = _distance(
         keypoints_df["left_shoulder_x_smooth"],
@@ -165,17 +280,50 @@ def _build_body_scale(
         keypoints_df["right_hip_x_smooth"],
         keypoints_df["right_hip_y_smooth"],
     )
-    raw_scale = torso.where(torso > 1e-4, pd.concat([shoulder_width, hip_width], axis=1).max(axis=1))
-    valid = raw_scale.replace([np.inf, -np.inf], np.nan).dropna()
-    fallback = float(valid.median()) if not valid.empty else 1.0
+    raw_scale = pd.concat(
+        [
+            torso,
+            shoulder_width * 1.6,
+            hip_width * 2.0,
+        ],
+        axis=1,
+    ).max(axis=1)
+    valid_mask = _valid_scale_confidence(keypoints_df)
+    valid_scale = raw_scale.where(valid_mask).replace([np.inf, -np.inf], np.nan).dropna()
+    if valid_scale.empty:
+        valid_scale = raw_scale.replace([np.inf, -np.inf], np.nan).dropna()
+    stable_scale = float(valid_scale.median()) if not valid_scale.empty else 1.0
+    body_scale = pd.Series(stable_scale, index=keypoints_df.index, dtype=float)
     return (
-        raw_scale.replace([np.inf, -np.inf], np.nan)
-        .interpolate(limit_direction="both")
-        .rolling(window=7, center=True, min_periods=1)
-        .median()
-        .clip(lower=fallback * 0.55, upper=fallback * 1.45)
-        .fillna(fallback)
+        raw_scale.replace([np.inf, -np.inf], np.nan).interpolate(limit_direction="both").fillna(stable_scale),
+        body_scale,
+        {
+            "version": "pelvis_stable_body_scale_2d_v2",
+            "rawScale": "max(torso, shoulder_width * 1.6, hip_width * 2.0)",
+            "stableScale": round(stable_scale, 6),
+            "stableScaleStatistic": "median(rawScale over valid frames)",
+            "origin": "pelvis_center",
+            "mirror": "left_handed_pitchers",
+            "validFrameCount": int(len(valid_scale)),
+        },
     )
+
+
+def _valid_scale_confidence(keypoints_df: pd.DataFrame) -> pd.Series:
+    confidence_columns = [
+        column
+        for column in (
+            "left_shoulder_confidence",
+            "right_shoulder_confidence",
+            "left_hip_confidence",
+            "right_hip_confidence",
+        )
+        if column in keypoints_df.columns
+    ]
+    if not confidence_columns:
+        return pd.Series(True, index=keypoints_df.index)
+    confidence = keypoints_df[confidence_columns].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    return confidence.mean(axis=1) >= 0.05
 
 
 def _build_body_axes(
@@ -227,4 +375,3 @@ def _midpoint(a: pd.Series, b: pd.Series) -> pd.Series:
 
 def _distance(x1: pd.Series, y1: pd.Series, x2: pd.Series, y2: pd.Series) -> pd.Series:
     return np.sqrt(((pd.to_numeric(x2, errors="coerce") - pd.to_numeric(x1, errors="coerce")) ** 2) + ((pd.to_numeric(y2, errors="coerce") - pd.to_numeric(y1, errors="coerce")) ** 2))
-

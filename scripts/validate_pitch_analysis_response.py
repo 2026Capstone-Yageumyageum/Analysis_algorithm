@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-EXPECTED_PHASES = {"leg_lift", "stride", "release", "follow_through"}
+EXPECTED_PHASES = {"windup", "leg_lift", "stride", "acceleration", "follow_through"}
 TOP_LEVEL_REQUIRED_FIELDS = {
     "videoId",
     "status",
@@ -28,6 +28,22 @@ PLAYER_REQUIRED_FIELDS = {
     "proId",
     "overallScore",
     "phaseScores",
+    "release",
+    "feedback",
+}
+RELEASE_REQUIRED_FIELDS = {"proFrame", "userFrame", "pro", "user", "timing", "point"}
+RELEASE_EVENT_REQUIRED_FIELDS = {"frame", "beforeFrame", "exitFrame", "method", "status", "source"}
+RELEASE_TIMING_REQUIRED_FIELDS = {"proPitchPercent", "userPitchPercent", "differencePercent", "message"}
+RELEASE_POINT_REQUIRED_FIELDS = {"difference", "heightDifference", "sideDifference", "message"}
+FEEDBACK_REQUIRED_FIELDS = {"good", "bad"}
+FEEDBACK_ITEM_REQUIRED_FIELDS = {"phase", "message", "evidence"}
+FEEDBACK_EVIDENCE_REQUIRED_FIELDS = {
+    "proFrame",
+    "userFrame",
+    "proPhasePercent",
+    "userPhasePercent",
+    "differencePercent",
+    "difference",
 }
 PHASE_SCORE_REQUIRED_FIELDS = {
     "phase",
@@ -156,6 +172,8 @@ def _validate_players(value: Any, errors: list[str], warnings: list[str], *, str
         if current_score is not None:
             previous_score = current_score
         _validate_phase_scores(player.get("phaseScores"), errors, warnings, strict=strict, path=f"players[{index}].phaseScores")
+        _validate_release(player.get("release"), errors, path=f"players[{index}].release")
+        _validate_feedback(player.get("feedback"), errors, path=f"players[{index}].feedback")
 
 
 def _validate_phase_scores(
@@ -187,7 +205,80 @@ def _validate_phase_scores(
                 errors,
             )
         for field_name in ("userStartFrame", "userEndFrame", "proStartFrame", "proEndFrame"):
-            _expect(isinstance(item.get(field_name), int), f"{item.get('phase')} {field_name}가 정수가 아닙니다.", errors)
+            _expect(_is_finite_number(item.get(field_name)), f"{item.get('phase')} {field_name}가 유한한 숫자가 아닙니다.", errors)
+
+
+def _validate_release(value: Any, errors: list[str], *, path: str) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path}가 object가 아닙니다.")
+        return
+    missing = RELEASE_REQUIRED_FIELDS.difference(value)
+    _expect(not missing, f"{path} 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(value, RELEASE_REQUIRED_FIELDS, path, errors)
+    for field_name in ("proFrame", "userFrame"):
+        _expect(value.get(field_name) is None or _is_finite_number(value.get(field_name)), f"{path}.{field_name}가 숫자/null이 아닙니다.", errors)
+    _validate_release_event(value.get("pro"), errors, path=f"{path}.pro")
+    _validate_release_event(value.get("user"), errors, path=f"{path}.user")
+    timing = value.get("timing")
+    point = value.get("point")
+    if not isinstance(timing, dict):
+        errors.append(f"{path}.timing이 object가 아닙니다.")
+    else:
+        _expect(not RELEASE_TIMING_REQUIRED_FIELDS.difference(timing), f"{path}.timing 필드 누락: {sorted(RELEASE_TIMING_REQUIRED_FIELDS.difference(timing))}", errors)
+        _validate_no_extra_fields(timing, RELEASE_TIMING_REQUIRED_FIELDS, f"{path}.timing", errors)
+    if not isinstance(point, dict):
+        errors.append(f"{path}.point가 object가 아닙니다.")
+    else:
+        _expect(not RELEASE_POINT_REQUIRED_FIELDS.difference(point), f"{path}.point 필드 누락: {sorted(RELEASE_POINT_REQUIRED_FIELDS.difference(point))}", errors)
+        _validate_no_extra_fields(point, RELEASE_POINT_REQUIRED_FIELDS, f"{path}.point", errors)
+
+
+def _validate_release_event(value: Any, errors: list[str], *, path: str) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path}가 object가 아닙니다.")
+        return
+    missing = RELEASE_EVENT_REQUIRED_FIELDS.difference(value)
+    _expect(not missing, f"{path} 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(value, RELEASE_EVENT_REQUIRED_FIELDS, path, errors)
+    for field_name in ("frame", "beforeFrame", "exitFrame"):
+        _expect(value.get(field_name) is None or _is_finite_number(value.get(field_name)), f"{path}.{field_name}가 숫자/null이 아닙니다.", errors)
+    for field_name in ("method", "status", "source"):
+        _expect(isinstance(value.get(field_name), str), f"{path}.{field_name}가 문자열이 아닙니다.", errors)
+
+
+def _validate_feedback(value: Any, errors: list[str], *, path: str) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path}가 object가 아닙니다.")
+        return
+    missing = FEEDBACK_REQUIRED_FIELDS.difference(value)
+    _expect(not missing, f"{path} 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(value, FEEDBACK_REQUIRED_FIELDS, path, errors)
+    for group_name in ("good", "bad"):
+        items = value.get(group_name)
+        if not isinstance(items, list):
+            errors.append(f"{path}.{group_name}이 array가 아닙니다.")
+            continue
+        for index, item in enumerate(items):
+            _validate_feedback_item(item, errors, path=f"{path}.{group_name}[{index}]")
+
+
+def _validate_feedback_item(value: Any, errors: list[str], *, path: str) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path}가 object가 아닙니다.")
+        return
+    missing = FEEDBACK_ITEM_REQUIRED_FIELDS.difference(value)
+    _expect(not missing, f"{path} 필드 누락: {sorted(missing)}", errors)
+    _validate_no_extra_fields(value, FEEDBACK_ITEM_REQUIRED_FIELDS, path, errors)
+    if value.get("phase") is not None:
+        _expect(value.get("phase") in EXPECTED_PHASES, f"{path}.phase가 허용된 phase가 아닙니다.", errors)
+    _expect(isinstance(value.get("message"), str), f"{path}.message가 문자열이 아닙니다.", errors)
+    evidence = value.get("evidence")
+    if not isinstance(evidence, dict):
+        errors.append(f"{path}.evidence가 object가 아닙니다.")
+        return
+    missing_evidence = FEEDBACK_EVIDENCE_REQUIRED_FIELDS.difference(evidence)
+    _expect(not missing_evidence, f"{path}.evidence 필드 누락: {sorted(missing_evidence)}", errors)
+    _validate_no_extra_fields(evidence, FEEDBACK_EVIDENCE_REQUIRED_FIELDS, f"{path}.evidence", errors)
 
 
 def _validate_no_extra_fields(value: dict[str, Any], allowed_fields: set[str], path: str, errors: list[str]) -> None:

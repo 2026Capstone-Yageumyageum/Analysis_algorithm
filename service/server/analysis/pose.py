@@ -64,19 +64,34 @@ def build_csv_columns() -> list[str]:
 CSV_COLUMNS = build_csv_columns()
 
 
-def extract_skeleton_data_csv_text(video_path: Path, max_frames: int | None = None) -> tuple[str, dict[str, Any]]:
+def extract_skeleton_data_csv_text(
+    video_path: Path,
+    max_frames: int | None = None,
+    *,
+    sample_evenly: bool = False,
+) -> tuple[str, dict[str, Any]]:
     """Extract MediaPipe pose landmarks and serialize the project CSV schema.
 
     If MediaPipe is not installed, this returns a deterministic placeholder CSV
     with confidence 0.0 so the API contract is still runnable during integration.
     """
     try:
-        return _extract_with_mediapipe(video_path, max_frames=max_frames)
+        return _extract_with_mediapipe(video_path, max_frames=max_frames, sample_evenly=sample_evenly)
     except ModuleNotFoundError:
-        return _extract_placeholder(video_path, reason="mediapipe_not_installed", max_frames=max_frames)
+        return _extract_placeholder(
+            video_path,
+            reason="mediapipe_not_installed",
+            max_frames=max_frames,
+            sample_evenly=sample_evenly,
+        )
 
 
-def _extract_with_mediapipe(video_path: Path, max_frames: int | None = None) -> tuple[str, dict[str, Any]]:
+def _extract_with_mediapipe(
+    video_path: Path,
+    max_frames: int | None = None,
+    *,
+    sample_evenly: bool = False,
+) -> tuple[str, dict[str, Any]]:
     import mediapipe as mp  # type: ignore[import-not-found]
 
     pose_module = mp.solutions.pose
@@ -103,6 +118,12 @@ def _extract_with_mediapipe(video_path: Path, max_frames: int | None = None) -> 
         raise ValueError(f"영상 파일을 열 수 없습니다: {video_path.name}")
 
     fps = _safe_positive_float(capture.get(cv2.CAP_PROP_FPS), fallback=30.0)
+    source_frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    target_frame_indices = _target_frame_indices(
+        source_frame_count=source_frame_count,
+        max_frames=max_frames,
+        sample_evenly=sample_evenly,
+    )
     rows: list[dict[str, Any]] = []
     previous_values = _default_joint_values()
 
@@ -113,13 +134,12 @@ def _extract_with_mediapipe(video_path: Path, max_frames: int | None = None) -> 
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     ) as pose:
-        frame_index = 0
-        while True:
+        for frame_index in target_frame_indices:
+            if sample_evenly:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()
             if not ok:
-                break
-            if max_frames is not None and frame_index >= max_frames:
-                break
+                continue
 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = pose.process(rgb)
@@ -150,7 +170,6 @@ def _extract_with_mediapipe(video_path: Path, max_frames: int | None = None) -> 
                 row[f"{joint}_imputed_flag"] = not detected
 
             rows.append(row)
-            frame_index += 1
 
     capture.release()
     _append_smoothed_columns(rows)
@@ -159,6 +178,8 @@ def _extract_with_mediapipe(video_path: Path, max_frames: int | None = None) -> 
         "poseModel": "MediaPipe Pose",
         "status": "ready",
         "frameCount": len(rows),
+        "sourceFrameCount": source_frame_count,
+        "sampleEvenly": sample_evenly,
         "warning": None,
     }
 
@@ -167,6 +188,8 @@ def _extract_placeholder(
     video_path: Path,
     reason: str,
     max_frames: int | None = None,
+    *,
+    sample_evenly: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -175,9 +198,13 @@ def _extract_placeholder(
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     capture.release()
 
-    usable_count = min(frame_count, max_frames) if max_frames is not None else frame_count
+    target_frame_indices = _target_frame_indices(
+        source_frame_count=frame_count,
+        max_frames=max_frames,
+        sample_evenly=sample_evenly,
+    )
     rows: list[dict[str, Any]] = []
-    for frame_index in range(max(0, usable_count)):
+    for frame_index in target_frame_indices:
         row: dict[str, Any] = {
             "frame_index": frame_index,
             "time_sec": round(frame_index / fps, 6) if fps > 0 else 0.0,
@@ -196,8 +223,26 @@ def _extract_placeholder(
         "poseModel": "placeholder",
         "status": "fallback",
         "frameCount": len(rows),
+        "sourceFrameCount": frame_count,
+        "sampleEvenly": sample_evenly,
         "warning": reason,
     }
+
+
+def _target_frame_indices(source_frame_count: int, max_frames: int | None, *, sample_evenly: bool) -> list[int]:
+    if source_frame_count <= 0:
+        return []
+    if max_frames is None or max_frames >= source_frame_count:
+        return list(range(source_frame_count))
+    usable_count = max(1, max_frames)
+    if not sample_evenly:
+        return list(range(usable_count))
+    if usable_count == 1:
+        return [0]
+    return [
+        int(round(index * (source_frame_count - 1) / (usable_count - 1)))
+        for index in range(usable_count)
+    ]
 
 
 def _default_joint_values() -> dict[str, tuple[float, float]]:

@@ -82,7 +82,7 @@
 - 응답 최상위 필드가 `videoId`, `status`, `user_data`, `players`만 있는지 확인합니다.
 - `user_data.skeleton_data`에 `frame_index`, `time_sec`, 관절 좌표, confidence 컬럼이 포함되는지 확인합니다.
 - `players`가 최대 3개이며 `overallScore` 기준으로 정렬되어 있는지 확인합니다.
-- `players[].phaseScores`에 `leg_lift`, `stride`, `release`, `follow_through`가 있는지 확인합니다.
+- `players[].phaseScores`에 `windup`, `leg_lift`, `stride`, `acceleration`, `follow_through`가 있는지 확인합니다.
 - 구속 계산을 쓰는 경우 `arrivalFrame > releaseFrame`, `fps > 0`, `targetDistanceM - releaseExtensionM > 0` 조건을 만족하는지 확인합니다.
 
 ## 참고 문서

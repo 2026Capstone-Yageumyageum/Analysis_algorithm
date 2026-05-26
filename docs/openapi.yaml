@@ -227,7 +227,7 @@ components:
           properties:
             algorithmName:
               type: string
-              example: body_frame_phase_direction_vector_v1
+              example: fixed_step_pose_resampling_v1
             scoreScale:
               type: string
               example: 0~100
@@ -313,7 +313,7 @@ components:
     PlayerMatch:
       type: object
       additionalProperties: false
-      required: [analysisId, proId, overallScore, phaseScores]
+      required: [analysisId, proId, overallScore, phaseScores, release, feedback]
       properties:
         analysisId:
           type: string
@@ -331,6 +331,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PhaseScore"
+        release:
+          $ref: "#/components/schemas/ReleaseAnalysis"
+        feedback:
+          $ref: "#/components/schemas/AnalysisFeedback"
     PhaseScore:
       type: object
       additionalProperties: false
@@ -338,6 +342,7 @@ components:
       properties:
         phase:
           type: string
+          enum: [windup, leg_lift, stride, acceleration, follow_through]
           example: leg_lift
         label:
           type: string
@@ -348,13 +353,146 @@ components:
           minimum: 0
           maximum: 100
         userStartFrame:
-          type: integer
+          type: number
         userEndFrame:
-          type: integer
+          type: number
         proStartFrame:
-          type: integer
+          type: number
         proEndFrame:
+          type: number
+    ReleaseAnalysis:
+      type: object
+      additionalProperties: false
+      required: [proFrame, userFrame, pro, user, timing, point]
+      properties:
+        proFrame:
+          type: number
+          nullable: true
+        userFrame:
+          type: number
+          nullable: true
+        pro:
+          $ref: "#/components/schemas/ReleaseEventDetail"
+        user:
+          $ref: "#/components/schemas/ReleaseEventDetail"
+        timing:
+          $ref: "#/components/schemas/ReleaseTiming"
+        point:
+          $ref: "#/components/schemas/ReleasePoint"
+    ReleaseEventDetail:
+      type: object
+      additionalProperties: false
+      required: [frame, beforeFrame, exitFrame, method, status, source]
+      properties:
+        frame:
+          type: number
+          nullable: true
+          example: 128.5
+        beforeFrame:
+          type: number
+          nullable: true
+          example: 128
+        exitFrame:
+          type: number
+          nullable: true
+          example: 129
+        method:
+          type: string
+          example: ball_exit_midpoint_v1
+        status:
+          type: string
+          example: ready
+        source:
+          type: string
+          example: bright_or_motion_aligned_ball_blob
+    ReleaseTiming:
+      type: object
+      additionalProperties: false
+      required: [proPitchPercent, userPitchPercent, differencePercent, message]
+      properties:
+        proPitchPercent:
           type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        userPitchPercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        differencePercent:
+          type: integer
+          nullable: true
+        message:
+          type: string
+    ReleasePoint:
+      type: object
+      additionalProperties: false
+      required: [difference, heightDifference, sideDifference, message]
+      properties:
+        difference:
+          type: number
+          nullable: true
+        heightDifference:
+          type: number
+          nullable: true
+        sideDifference:
+          type: number
+          nullable: true
+        message:
+          type: string
+    AnalysisFeedback:
+      type: object
+      additionalProperties: false
+      required: [good, bad]
+      properties:
+        good:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+        bad:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+    FeedbackItem:
+      type: object
+      additionalProperties: false
+      required: [phase, message, evidence]
+      properties:
+        phase:
+          type: string
+          enum: [windup, leg_lift, stride, acceleration, follow_through]
+        message:
+          type: string
+        evidence:
+          $ref: "#/components/schemas/FeedbackEvidence"
+    FeedbackEvidence:
+      type: object
+      additionalProperties: false
+      required: [proFrame, userFrame, proPhasePercent, userPhasePercent, differencePercent, difference]
+      properties:
+        proFrame:
+          type: number
+          nullable: true
+        userFrame:
+          type: number
+          nullable: true
+        proPhasePercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        userPhasePercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        differencePercent:
+          type: integer
+          nullable: true
+        difference:
+          type: number
+          nullable: true
     SpeedResult:
       type: object
       properties:

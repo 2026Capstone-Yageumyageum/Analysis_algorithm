@@ -222,7 +222,40 @@ OpenCV가 영상 fps를 읽지 못하면 `videoMeta.fps`는 `0`으로 내려갈 
           "proStartFrame": 80,
           "proEndFrame": 145
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 176.5,
+        "userFrame": 128.5,
+        "timing": {
+          "proPitchPercent": 84,
+          "userPitchPercent": 91,
+          "differencePercent": 7,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.18,
+          "heightDifference": -0.08,
+          "sideDifference": 0.16,
+          "message": "릴리즈 포인트가 선수와 비슷합니다."
+        }
+      },
+      "feedback": {
+        "good": [
+          {
+            "phase": "stride",
+            "message": "스트라이드 구간의 전체 움직임이 선수와 비교적 비슷합니다.",
+            "evidence": {
+              "proFrame": 155.5,
+              "userFrame": 104,
+              "proPhasePercent": 50,
+              "userPhasePercent": 50,
+              "differencePercent": 0,
+              "difference": 0.21
+            }
+          }
+        ],
+        "bad": []
+      }
     }
   ],
   "videos": {

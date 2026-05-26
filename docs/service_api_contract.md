@@ -135,7 +135,7 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `user_data.frame_count`: 사용자 영상 프레임 수
 - `user_data.fps`: 사용자 영상 FPS
 - `user_data.resolution`: 사용자 영상 해상도
-- `players`: 프로 skeleton 목록과 비교한 상위 3개 결과. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`만 포함합니다.
+- `players`: 프로 skeleton 목록과 비교한 상위 3개 결과. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`, `release`, `feedback`을 포함합니다.
 
 응답 예시:
 
@@ -165,7 +165,56 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
           "proStartFrame": 80,
           "proEndFrame": 145
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 176.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 176.5,
+          "beforeFrame": 176,
+          "exitFrame": 177,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 84,
+          "userPitchPercent": 91,
+          "differencePercent": 7,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.18,
+          "heightDifference": -0.08,
+          "sideDifference": 0.16,
+          "message": "릴리즈 포인트가 선수와 비슷합니다."
+        }
+      },
+      "feedback": {
+        "good": [
+          {
+            "phase": "stride",
+            "message": "스트라이드 구간의 전체 움직임이 선수와 비교적 비슷합니다.",
+            "evidence": {
+              "proFrame": 155.5,
+              "userFrame": 104,
+              "proPhasePercent": 50,
+              "userPhasePercent": 50,
+              "differencePercent": 0,
+              "difference": 0.21
+            }
+          }
+        ],
+        "bad": []
+      }
     },
     {
       "analysisId": "analysis_2",
@@ -181,7 +230,43 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
           "proStartFrame": 76,
           "proEndFrame": 138
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 138.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 138.5,
+          "beforeFrame": 138,
+          "exitFrame": 139,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 86,
+          "userPitchPercent": 91,
+          "differencePercent": 5,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.24,
+          "heightDifference": -0.17,
+          "sideDifference": 0.16,
+          "message": "릴리즈 포인트가 선수보다 낮게 형성됩니다."
+        }
+      },
+      "feedback": {
+        "good": [],
+        "bad": []
+      }
     },
     {
       "analysisId": "analysis_3",
@@ -197,7 +282,43 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
           "proStartFrame": 82,
           "proEndFrame": 150
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 150.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 150.5,
+          "beforeFrame": 150,
+          "exitFrame": 151,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 88,
+          "userPitchPercent": 91,
+          "differencePercent": 3,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.31,
+          "heightDifference": -0.24,
+          "sideDifference": 0.19,
+          "message": "릴리즈 포인트가 선수보다 낮게 형성됩니다."
+        }
+      },
+      "feedback": {
+        "good": [],
+        "bad": []
+      }
     }
   ]
 }
@@ -216,8 +337,10 @@ Python 서버는 서버 캐시 전체를 비교한 뒤 `overallScore` 기준 상
 - `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
+- `players[].release`
+- `players[].feedback`
 
-`players`는 전체 프로 skeleton 목록 중 `overallScore` 기준 상위 3개입니다. 각 `players[].phaseScores`에는 phase별 유사도와 사용자/프로 시작-끝 프레임이 들어가므로, 프론트의 phase별 비교 화면과 결과 상세 화면에서 함께 사용할 수 있습니다.
+`players`는 전체 프로 skeleton 목록 중 `overallScore` 기준 상위 3개입니다. 각 `players[].phaseScores`에는 fixed-step 리샘플링 기반 phase별 유사도와 사용자/프로 시작-끝 프레임이 들어가므로, 프론트의 phase별 비교 화면과 결과 상세 화면에서 함께 사용할 수 있습니다. `players[].release`는 릴리즈 순간 전용 분석이며, `pro`/`user` 안의 `method`, `status`, `source`로 공 기반 탐지인지 proxy fallback인지 구분합니다. `players[].feedback`은 릴리즈를 제외한 phase 기반 잘한 점/문제점 요약입니다.
 
 프로 skeleton CSV는 백엔드 DB에 이미 저장되어 있고 Python 서버 메모리 캐시에 올라와 있으므로, 응답에 다시 포함하지 않는 것을 기본으로 합니다. 필요하면 디버깅용 옵션으로만 포함합니다.
 

@@ -94,6 +94,123 @@
         </form>
       </section>
 
+      <section class="panel skeleton-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Fixed Step Preview</p>
+            <h2>리샘플링 Skeleton 겹쳐보기</h2>
+          </div>
+          <button type="button" id="preview-load-button" class="secondary-button">기본 조합 보기</button>
+        </div>
+        <form id="preview-upload-form" class="preview-upload-form">
+          <label>
+            pro_data 선택
+            <select id="preview-pro-select" name="proVideoOption">
+              <option value="">불러오는 중</option>
+            </select>
+          </label>
+          <label>
+            user_data 선택
+            <select id="preview-user-select" name="userVideoOption">
+              <option value="">불러오는 중</option>
+            </select>
+          </label>
+          <label>
+            선수 영상 업로드
+            <input type="file" name="proVideo" accept="video/*" />
+          </label>
+          <label>
+            사용자 영상 업로드
+            <input type="file" name="userVideo" accept="video/*" />
+          </label>
+          <label>
+            분석 프레임 제한
+            <input name="maxFrames" type="number" min="1" placeholder="비워두면 전체, 최소 360" />
+          </label>
+          <button type="submit">선택 영상으로 보기</button>
+        </form>
+        <div class="preview-layout">
+          <div class="preview-stage">
+            <canvas id="skeleton-canvas" width="960" height="620" aria-label="리샘플링 skeleton preview"></canvas>
+          </div>
+          <div class="preview-controls">
+            <label>
+              Phase
+              <select id="preview-phase-select"></select>
+            </label>
+            <label>
+              Step
+              <input id="preview-step-slider" type="range" min="0" max="0" value="0" />
+            </label>
+            <div class="preview-actions">
+              <button type="button" id="preview-play-button">재생</button>
+              <button type="button" id="preview-prev-button" class="secondary-button">이전</button>
+              <button type="button" id="preview-next-button" class="secondary-button">다음</button>
+            </div>
+            <dl class="preview-readout">
+              <div>
+                <dt>현재 step</dt>
+                <dd id="preview-step-text">-</dd>
+              </div>
+              <div>
+                <dt>자세 점수</dt>
+                <dd id="preview-score-text">-</dd>
+              </div>
+              <div>
+                <dt>프레임</dt>
+                <dd id="preview-frame-text">-</dd>
+              </div>
+              <div>
+                <dt>릴리즈 기준</dt>
+                <dd id="preview-release-text">-</dd>
+              </div>
+              <div>
+                <dt>소스</dt>
+                <dd id="preview-source-text">-</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div class="frame-map-panel">
+          <div class="panel-head">
+            <h2>프레임 맵</h2>
+            <span id="frame-map-summary">-</span>
+          </div>
+          <div class="frame-map-legend" aria-label="프레임 색상 기준">
+            <span><i class="legend-dot marker-good"></i>잘한 프레임</span>
+            <span><i class="legend-dot marker-bad"></i>못한 프레임</span>
+            <span><i class="legend-dot marker-release"></i>릴리즈</span>
+            <span><i class="legend-line"></i>현재 step</span>
+          </div>
+          <div id="frame-map" class="frame-map">
+            <p class="empty-state">프레임 맵 대기 중</p>
+          </div>
+        </div>
+        <div class="cocking-summary">
+          <div class="panel-head">
+            <h2>코킹 Proxy 프레임</h2>
+            <span id="cocking-status-text">-</span>
+          </div>
+          <div class="table-wrap">
+            <table class="cocking-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>선수 프레임</th>
+                  <th>사용자 프레임</th>
+                  <th>측정 기준</th>
+                </tr>
+              </thead>
+              <tbody id="cocking-table-body">
+                <tr>
+                  <td colspan="4">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="result-grid" id="result-cards" hidden>
         <article class="metric-card">
           <span>Top 1 유사도</span>

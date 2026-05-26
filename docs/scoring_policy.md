@@ -1,92 +1,150 @@
 # 유사도 점수 계산 정책
 
-이 문서는 유사도 알고리즘 v1의 점수 계산 방향을 정리합니다.
+이 문서는 서비스 API v1의 현재 유사도 점수 계산 방식을 정리합니다.
 
-## 현재 점수 후보
+## 현재 방식
 
-현재 `service` 서버의 점수는 phase별 시작-끝 관절 방향 벡터 비교입니다.
+현재 `service` 서버의 메인 점수는 `fixed_step_pose_resampling_v1`입니다.
 
-입력 좌표는 원본 화면 좌표를 바로 쓰지 않고, 다음 분석용 좌표로 변환한 뒤 사용합니다.
+핵심은 phase별로 선수와 사용자의 프레임 수가 달라도 같은 개수의 진행률 step으로 보간한 뒤, 같은 step의 skeleton 자세 거리를 비교하는 방식입니다. 속도 자체는 점수에 넣지 않고, phase 안에서 나타나는 자세 흐름만 비교합니다.
 
 ```text
-원본 0~1 smooth 좌표
+MediaPipe keypoints
 -> pelvis 중심 정렬
 -> torso 축 기준 body-frame 좌표계 구성
--> body-scale로 나누어 신체 크기 정규화
+-> stable body-scale로 신체 크기 정규화
 -> 좌완/우완 mirror 처리
+-> phase 탐지
+-> phase별 고정 step 리샘플링
+-> 같은 step의 skeleton 자세 거리 비교
+-> phaseScore / overallScore 계산
 ```
+
+## 좌표 정규화
+
+입력 좌표는 원본 화면 좌표를 바로 쓰지 않고 분석용 body-frame 좌표로 변환합니다.
 
 ```text
-phase 시작 프레임의 관절 위치
-phase 끝 프레임의 관절 위치
--> 관절 이동 벡터
--> 단위 벡터 변환
--> 사용자 벡터와 프로 벡터의 코사인 유사도
--> 0~100 점수로 변환
+원점: 골반 중심
+Y축: 골반 중심 -> 어깨 중심 방향
+X축: torso 축에 수직인 방향
+scale: median(max(torso, shoulder_width * 1.6, hip_width * 2.0))
 ```
 
-코사인 유사도 변환식:
+scale은 매 프레임 torso 길이를 그대로 쓰지 않고, confidence가 유효한 프레임들의 안정적인 median 값을 전체 영상에 고정 적용합니다. 릴리즈 때 몸이 숙여져 torso가 짧아지는 영상에서도 skeleton이 과하게 늘어나는 문제를 줄이기 위함입니다.
+
+## Phase와 step 수
+
+phase는 5개로 나눕니다.
+
+| phase | 한글명 | step 수 | 가중치 |
+| --- | --- | ---: | ---: |
+| `windup` | 와인드업 | 20 | 0.10 |
+| `leg_lift` | 레그 리프트 | 50 | 0.20 |
+| `stride` | 스트라이드 | 45 | 0.25 |
+| `acceleration` | 가속 | 40 | 0.30 |
+| `follow_through` | 팔로스루 | 35 | 0.15 |
+
+각 phase의 시작/끝 프레임이 다르더라도 `np.linspace(startFrame, endFrame, stepCount)`로 목표 프레임을 만들고, 각 관절 좌표를 선형 보간합니다.
+
+예:
 
 ```text
-score = ((cos_similarity + 1) / 2) * 100
+선수 stride: 157 -> 179
+사용자 stride: 140 -> 191
+둘 다 45 step으로 리샘플링
+같은 step index끼리 자세 비교
 ```
 
-## 관절 confidence 가중치
+## Step별 자세 점수
 
-각 관절 점수는 사용자와 프로 영상의 boundary confidence를 함께 반영합니다.
+각 step에서는 15개 주요 관절의 body-frame 좌표 거리를 비교합니다.
 
 ```text
-jointConfidenceWeight = sqrt(userConfidence * proConfidence)
-phaseScore = sum(jointScore * jointConfidenceWeight) / sum(jointConfidenceWeight)
+distance = euclidean_distance(pro_joint, user_joint)
+jointScore = 100 * exp(-0.5 * (distance / 0.55)^2)
+jointWeight = sqrt(proConfidence * userConfidence)
+stepScore = sum(jointScore * jointWeight) / sum(jointWeight)
 ```
 
-단, 사용자 또는 프로 중 하나라도 confidence가 너무 낮으면 해당 관절은 제외합니다.
+confidence가 낮은 관절은 제외합니다.
 
 ```text
-MIN_JOINT_CONFIDENCE = 0.05
+MIN_CONFIDENCE = 0.05
+POSE_DISTANCE_SIGMA = 0.55
 ```
 
-## phase별 기본 가중치
+## Phase 점수와 전체 점수
 
-초기 v1 가중치는 다음과 같이 둡니다.
+phase 점수는 해당 phase의 유효 step 점수 평균입니다.
 
-| phase | 한글명 | 가중치 | 이유 |
-| --- | --- | ---: | --- |
-| `leg_lift` | 레그 리프트 | 0.25 | 투구 시작 균형과 하체 준비를 반영 |
-| `stride` | 스트라이드 | 0.30 | 보폭 이동과 상하체 연결이 크게 드러남 |
-| `release` | 릴리즈 | 0.30 | 투구폼 차이가 가장 직접적으로 드러남 |
-| `follow_through` | 팔로스루 | 0.15 | 릴리즈 이후 마무리 흐름을 보조적으로 반영 |
+```text
+phaseScore = mean(validStepScores)
+```
 
-전체 점수:
+전체 점수는 phase 가중 평균입니다.
 
 ```text
 overallScore = sum(phaseScore * phaseWeight) / sum(validPhaseWeight)
 ```
 
-## phase별 관절 후보
+## Feedback 기준
 
-| phase | 주요 관절 |
-| --- | --- |
-| `leg_lift` | 양쪽 무릎, 양쪽 발목, 양쪽 손목 |
-| `stride` | 양쪽 foot index, 양쪽 무릎, 양쪽 손목 |
-| `release` | 양쪽 어깨, 양쪽 팔꿈치, 양쪽 손목 |
-| `follow_through` | 양쪽 어깨, 양쪽 팔꿈치, 양쪽 손목 |
+`feedback.good`, `feedback.bad`는 phase 점수를 기준으로 생성합니다.
 
-## 아직 부족한 점
+```text
+good: phaseScore >= 78
+bad: phaseScore <= 68
+```
 
-- phase 내부 궤적을 반영하지 못합니다.
-- phase 구간이 너무 짧으면 한 프레임 오차에 크게 흔들립니다. 현재는 `stride`, `release`, `follow_through` 최소 길이 fallback을 v1로 적용했습니다.
-- 손목 confidence가 낮으면 투구팔 점수가 흔들릴 수 있습니다.
-- 후면 영상 원근감은 완전히 제거되지 않습니다.
+각각 최대 2개를 반환합니다. 기준을 만족하는 phase가 없으면, good에는 가장 점수가 높은 phase 1개, bad에는 가장 점수가 낮은 phase 1개를 fallback으로 넣습니다.
+
+`feedback`은 phase 기반 macro 메시지입니다. 릴리즈는 phase가 아니라 순간 이벤트이므로 `feedback` 안에 넣지 않고 `release` 필드로 따로 반환합니다.
+
+## 릴리즈 분석
+
+릴리즈는 별도 이벤트로 계산합니다.
+
+```text
+기본: 나가기 전 프레임과 나간 프레임의 midpoint
+fallback: 공 탐지 실패 시 손목 속도 기반 proxy midpoint
+```
+
+메인 API는 업로드된 user 원본 영상 경로가 있으므로 user release는 공 후보와 팔 속도 gate를 먼저 사용합니다. 캐시된 pro skeleton CSV에는 원본 영상 경로가 없을 수 있으므로, pro release는 공 기반 이벤트가 따로 주입되지 않으면 skeleton proxy release를 사용합니다. 실험 웹사이트 API는 pro/user 영상 경로가 모두 있는 경우 양쪽 모두 공 기반 release를 우선 시도합니다.
+
+릴리즈 피드백은 두 가지를 봅니다.
+
+```text
+timing: 전체 투구 구간 내 release 위치 percent 비교
+point: release frame에서 throwing wrist body-frame 좌표 비교
+```
+
+타이밍 판정:
+
+```text
+abs(userPitchPercent - proPitchPercent) <= 7: 비슷함
+양수: 사용자가 늦음
+음수: 사용자가 빠름
+```
+
+포인트 판정:
+
+```text
+difference <= 0.22: 비슷함
+그 외: heightDifference / sideDifference 중 큰 차이를 메시지로 반환
+```
 
 ## 현재 구현 위치
 
 - `service/server/analysis/normalization.py`: pelvis/torso/body-scale 기반 분석 좌표 생성
-- `service/server/analysis/phase.py`: 후면 영상 기준 keypoints 기반 phase detection v1
-- `service/server/analysis/similarity.py`: confidence-weighted phase별 방향 벡터 점수와 overallScore 계산
+- `service/server/analysis/phase.py`: 후면 영상 기준 keypoints 기반 phase detection
+- `service/server/analysis/resampling_preview.py`: fixed-step 리샘플링과 step별 skeleton 자세 점수
+- `service/server/analysis/similarity.py`: 메인 API용 phaseScore / overallScore / feedback 조립
+- `service/server/analysis/feedback.py`: release 분석과 phase 기반 good/bad 메시지 생성
 
-## 다음 고도화 후보
+## 아직 부족한 점
 
-- phase 내부를 일정 길이로 리샘플링한 뒤 방향 변화 흐름을 비교합니다.
-- 관절 방향 벡터에 관절 각도 차이를 함께 반영합니다.
-- fallback 보정이 들어간 phase 경계가 실제 동작 의미와 맞는지 시각 검증합니다.
+- 메인 API는 pro 원본 영상을 받지 않으므로 공 기반 pro release를 항상 쓸 수 없습니다.
+- `feedback.good/bad`는 아직 관절별 상세 원인 문장이 아니라 phase 점수 기반 macro입니다.
+- DTW는 현재 서비스 점수에 사용하지 않습니다.
+- 후면 영상 원근감은 완전히 제거되지 않습니다.

@@ -36,7 +36,7 @@ http://127.0.0.1:5020/api/openapi.yaml
 | `analysis/pose.py` | MediaPipe Pose 기반 사용자 skeleton CSV 생성과 CSV 컬럼 정의 |
 | `analysis/normalization.py` | pelvis/torso/body-scale 기반 분석용 body-frame 좌표 생성 |
 | `analysis/phase.py` | 후면 영상 기준 keypoints 기반 phase detection v1 |
-| `analysis/similarity.py` | phase별 시작-끝 방향 벡터 점수와 `overallScore` 계산 |
+| `analysis/similarity.py` | phase별 fixed-step 리샘플링 자세 점수와 `overallScore` 계산 |
 | `analysis/speed.py` | 릴리즈/도착 프레임과 실제 거리 기반 TOF 구속 계산 |
 | `analysis/video.py` | 영상 fps, frameCount, width, height, duration 메타데이터 추출 |
 
@@ -97,7 +97,8 @@ OpenAPI YAML 원문을 반환합니다.
 -> 프로 skeleton CSV 목록 순회
 -> pelvis/torso/body-scale 기반 분석 좌표 생성
 -> 후면 영상 기준 keypoints 기반 phase detection v1
--> phase별 시작-끝 body-frame 방향 벡터 비교
+-> phase별 fixed-step 리샘플링
+-> 같은 진행률 step끼리 body-frame skeleton 자세 거리 비교
 -> phase별 가중 평균으로 overallScore 계산
 -> overallScore 기준 Top 3 반환
 ```

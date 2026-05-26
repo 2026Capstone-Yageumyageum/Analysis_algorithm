@@ -83,6 +83,15 @@
       "overallScore": 82,
       "phaseScores": [
         {
+          "phase": "windup",
+          "label": "와인드업",
+          "score": 80,
+          "userStartFrame": 0,
+          "userEndFrame": 40,
+          "proStartFrame": 0,
+          "proEndFrame": 80
+        },
+        {
           "phase": "leg_lift",
           "label": "레그 리프트",
           "score": 86,
@@ -101,8 +110,8 @@
           "proEndFrame": 166
         },
         {
-          "phase": "release",
-          "label": "릴리즈",
+          "phase": "acceleration",
+          "label": "가속",
           "score": 81,
           "userStartFrame": 116,
           "userEndFrame": 128,
@@ -111,14 +120,76 @@
         },
         {
           "phase": "follow_through",
-          "label": "팔로우 스루",
+          "label": "팔로스루",
           "score": 84,
           "userStartFrame": 128,
           "userEndFrame": 180,
           "proStartFrame": 176,
           "proEndFrame": 210
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 176.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 176.5,
+          "beforeFrame": 176,
+          "exitFrame": 177,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 84,
+          "userPitchPercent": 91,
+          "differencePercent": 7,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.18,
+          "heightDifference": -0.08,
+          "sideDifference": 0.16,
+          "message": "릴리즈 포인트가 선수와 비슷합니다."
+        }
+      },
+      "feedback": {
+        "good": [
+          {
+            "phase": "stride",
+            "message": "스트라이드 구간의 전체 움직임이 선수와 비교적 비슷합니다.",
+            "evidence": {
+              "proFrame": 155.5,
+              "userFrame": 104,
+              "proPhasePercent": 50,
+              "userPhasePercent": 50,
+              "differencePercent": 0,
+              "difference": 0.21
+            }
+          }
+        ],
+        "bad": [
+          {
+            "phase": "acceleration",
+            "message": "가속 구간에서 선수와 움직임 차이가 크게 나타납니다.",
+            "evidence": {
+              "proFrame": 171,
+              "userFrame": 122,
+              "proPhasePercent": 50,
+              "userPhasePercent": 50,
+              "differencePercent": 0,
+              "difference": 0.39
+            }
+          }
+        ]
+      }
     },
     {
       "analysisId": "analysis_2",
@@ -134,7 +205,43 @@
           "proStartFrame": 76,
           "proEndFrame": 138
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 138.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 138.5,
+          "beforeFrame": 138,
+          "exitFrame": 139,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 86,
+          "userPitchPercent": 91,
+          "differencePercent": 5,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.24,
+          "heightDifference": -0.17,
+          "sideDifference": 0.16,
+          "message": "릴리즈 포인트가 선수보다 낮게 형성됩니다."
+        }
+      },
+      "feedback": {
+        "good": [],
+        "bad": []
+      }
     },
     {
       "analysisId": "analysis_3",
@@ -150,13 +257,49 @@
           "proStartFrame": 82,
           "proEndFrame": 150
         }
-      ]
+      ],
+      "release": {
+        "proFrame": 150.5,
+        "userFrame": 128.5,
+        "pro": {
+          "frame": 150.5,
+          "beforeFrame": 150,
+          "exitFrame": 151,
+          "method": "pose_proxy_midpoint_v1",
+          "status": "fallback",
+          "source": "throwing_wrist_speed_body"
+        },
+        "user": {
+          "frame": 128.5,
+          "beforeFrame": 128,
+          "exitFrame": 129,
+          "method": "ball_exit_midpoint_v1",
+          "status": "ready",
+          "source": "bright_or_motion_aligned_ball_blob"
+        },
+        "timing": {
+          "proPitchPercent": 88,
+          "userPitchPercent": 91,
+          "differencePercent": 3,
+          "message": "릴리즈 타이밍이 선수와 비슷합니다."
+        },
+        "point": {
+          "difference": 0.31,
+          "heightDifference": -0.24,
+          "sideDifference": 0.19,
+          "message": "릴리즈 포인트가 선수보다 낮게 형성됩니다."
+        }
+      },
+      "feedback": {
+        "good": [],
+        "bad": []
+      }
     }
   ]
 }
 ```
 
-`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`만 포함합니다. 각 `players[].phaseScores`는 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
+`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`, `release`, `feedback`을 포함합니다. 각 `players[].phaseScores`는 fixed-step 리샘플링 기반 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. `players[].release`는 릴리즈 순간 전용 분석이며, `pro`/`user` 안의 `method`, `status`, `source`로 공 기반 탐지인지 proxy fallback인지 구분합니다. `players[].feedback`은 릴리즈를 제외한 phase 기반 잘한 점/문제점 요약입니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
 
 ## `user_data.skeleton_data` 5프레임 축약 예시
 
