@@ -1,0 +1,589 @@
+openapi: 3.0.3
+info:
+  title: Integrated Pitch Analysis API
+  version: pitch_analysis_response_v1
+  description: >
+    서버 시작 시 백엔드에서 프로 skeleton CSV 목록을 캐싱하고,
+    분석 요청에서는 사용자 후면 투구 영상만 받아 사용자 keypoints CSV,
+    Top 3 프로 비교 유사도 점수, phase 정보를 반환하는 Python 분석 서버 API 명세입니다.
+servers:
+  - url: http://127.0.0.1:5020
+    description: Local integrated analysis server
+paths:
+  /api/docs:
+    get:
+      summary: Swagger UI 문서 페이지
+      description: 브라우저에서 Python 분석 서버 API를 확인할 수 있는 Swagger UI 페이지를 반환합니다.
+      responses:
+        "200":
+          description: Swagger UI HTML
+          content:
+            text/html:
+              schema:
+                type: string
+  /api/openapi.yaml:
+    get:
+      summary: OpenAPI YAML 원문
+      description: Swagger UI가 사용하는 OpenAPI 명세 파일을 반환합니다.
+      responses:
+        "200":
+          description: OpenAPI YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api/health:
+    get:
+      summary: 서버 상태 확인
+      responses:
+        "200":
+          description: 서버 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: integrated-pitch-analysis
+  /api/schema:
+    get:
+      summary: 서비스 연동 스키마 메타데이터 조회
+      description: 영상 처리 없이 응답 스키마 버전, 지원 카메라 방향, 알고리즘명, keypoints CSV 컬럼을 반환합니다.
+      responses:
+        "200":
+          description: 스키마 메타데이터
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchemaMetadata"
+  /api/pro-skeleton-cache:
+    get:
+      summary: 프로 skeleton cache 상태 조회
+      description: Python 서버가 현재 메모리에 캐싱한 프로 skeleton reference 개수와 소스를 확인합니다.
+      responses:
+        "200":
+          description: 캐시 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProSkeletonCacheStatus"
+  /api/pro-skeleton-cache/refresh:
+    post:
+      summary: 프로 skeleton cache 수동 갱신
+      description: 서버 환경변수 PRO_SKELETON_DATA_URL 또는 PRO_SKELETON_DATA_FILE 기준으로 프로 skeleton reference를 다시 로드합니다.
+      responses:
+        "200":
+          description: 갱신된 캐시 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProSkeletonCacheStatus"
+  /api/analyze/similarity:
+    post:
+      summary: 사용자 영상과 캐싱된 프로 skeleton 목록의 투구폼 유사도 분석
+      description: >
+        원본 영상은 임시 파일로만 처리하고 장기 저장하지 않습니다.
+        Python 서버는 서버 시작 또는 캐시 갱신 시 백엔드에서 프로 skeleton 목록을 받아 메모리에 캐싱합니다.
+        분석 요청은 userVideo만 전달하며, Python 서버는 사용자 skeleton CSV와 overallScore 기준 Top 3 비교 결과를 반환합니다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [userVideo]
+              properties:
+                userVideo:
+                  type: string
+                  format: binary
+                  description: 사용자 후면 투구 영상 파일
+                metadata:
+                  type: string
+                  description: JSON 문자열. videoId, pitchType, speed 설정 등을 포함합니다.
+                  example: '{"videoId":"user_video_001","analysisType":"pro_similarity","pitchType":"직구","cameraView":"rear"}'
+                  x-json-schema:
+                    type: object
+                    properties:
+                      videoId:
+                        type: string
+                      cameraView:
+                        type: string
+                        enum: [rear]
+                      user:
+                        type: object
+                        additionalProperties: true
+                      speed:
+                        type: object
+                        properties:
+                          user:
+                            type: object
+                            additionalProperties: true
+      responses:
+        "200":
+          description: 분석 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PitchAnalysisResponse"
+        "400":
+          description: 요청 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 서버 내부 오류
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/measure/speed:
+    post:
+      summary: 단일 영상 구속 측정
+      description: 릴리즈 프레임, 도착 프레임, 실제 거리 기반 TOF 방식으로 구속을 계산합니다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [video]
+              properties:
+                video:
+                  type: string
+                  format: binary
+                  description: 구속 측정 영상 파일
+                metadata:
+                  type: string
+                  description: JSON 문자열. releaseFrame, arrivalFrame, targetDistanceM, releaseExtensionM, fps 등을 포함합니다.
+                  example: '{"releaseFrame":120,"arrivalFrame":148,"targetDistanceM":16.0,"releaseExtensionM":1.5,"fps":60.0}'
+                  x-json-schema:
+                    type: object
+                    properties:
+                      releaseFrame:
+                        type: integer
+                        minimum: 0
+                      arrivalFrame:
+                        type: integer
+                        minimum: 0
+                        description: releaseFrame보다 커야 합니다.
+                      fps:
+                        type: number
+                        minimum: 0
+                        exclusiveMinimum: true
+                      targetDistanceM:
+                        type: number
+                        minimum: 0
+                      releaseExtensionM:
+                        type: number
+                        minimum: 0
+                    description: targetDistanceM - releaseExtensionM 값은 0보다 커야 합니다.
+      responses:
+        "200":
+          description: 구속 계산 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, videoMeta, speed]
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  videoMeta:
+                    $ref: "#/components/schemas/VideoMeta"
+                  speed:
+                    $ref: "#/components/schemas/SpeedResult"
+        "400":
+          description: 요청 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    SchemaMetadata:
+      type: object
+      required: [status, responseSchemaVersion, supportedCameraViews, similarity, request, keypointsCsvColumns]
+      properties:
+        status:
+          type: string
+          example: ok
+        responseSchemaVersion:
+          type: string
+          example: pitch_analysis_response_v1
+        supportedCameraViews:
+          type: array
+          items:
+            type: string
+            enum: [rear]
+        similarity:
+          type: object
+          properties:
+            algorithmName:
+              type: string
+              example: fixed_step_pose_resampling_v1
+            scoreScale:
+              type: string
+              example: 0~100
+            phases:
+              type: array
+              items:
+                type: string
+        request:
+          type: object
+          additionalProperties: true
+        keypointsCsvColumns:
+          type: array
+          items:
+            type: string
+    ProSkeletonCacheStatus:
+      type: object
+      required: [status, count, refreshedAt, players]
+      properties:
+        status:
+          type: string
+          enum: [ready, empty, error]
+        source:
+          type: string
+          nullable: true
+          description: PRO_SKELETON_DATA_URL 또는 PRO_SKELETON_DATA_FILE 값
+        count:
+          type: integer
+          example: 12
+        refreshedAt:
+          type: string
+          nullable: true
+        warning:
+          type: string
+          nullable: true
+        players:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    PitchAnalysisResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - videoId
+        - status
+        - user_data
+        - players
+      properties:
+        videoId:
+          type: string
+          example: user_video_001
+        status:
+          type: string
+          enum: [completed]
+        user_data:
+          $ref: "#/components/schemas/UserSkeletonData"
+        players:
+          type: array
+          maxItems: 3
+          description: overallScore 기준 상위 3개 프로 skeleton 비교 결과
+          items:
+            $ref: "#/components/schemas/PlayerMatch"
+    UserSkeletonData:
+      type: object
+      additionalProperties: false
+      required: [skeleton_data_id, skeleton_data, frame_count, fps, resolution]
+      properties:
+        skeleton_data_id:
+          type: string
+          example: user_skeleton_8f31d2a9
+        skeleton_data:
+          type: string
+          description: 사용자 영상에서 추출한 keypoints.csv 원문. 백엔드 저장용 기본 필드입니다.
+        frame_count:
+          type: integer
+          example: 123
+        fps:
+          type: number
+          example: 60.0
+        resolution:
+          type: string
+          example: 1920x1080
+    PlayerMatch:
+      type: object
+      additionalProperties: false
+      required: [analysisId, proId, overallScore, phaseScores, release, feedback]
+      properties:
+        analysisId:
+          type: string
+          example: analysis_1
+        proId:
+          type: string
+          example: "123123213"
+        overallScore:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+          example: 82
+        phaseScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhaseScore"
+        release:
+          $ref: "#/components/schemas/ReleaseAnalysis"
+        feedback:
+          $ref: "#/components/schemas/AnalysisFeedback"
+    PhaseScore:
+      type: object
+      additionalProperties: false
+      required: [phase, label, score, userStartFrame, userEndFrame, proStartFrame, proEndFrame]
+      properties:
+        phase:
+          type: string
+          enum: [windup, leg_lift, stride, acceleration, follow_through]
+          example: leg_lift
+        label:
+          type: string
+          example: 레그 리프트
+        score:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        userStartFrame:
+          type: number
+        userEndFrame:
+          type: number
+        proStartFrame:
+          type: number
+        proEndFrame:
+          type: number
+    ReleaseAnalysis:
+      type: object
+      additionalProperties: false
+      required: [proFrame, userFrame, pro, user, timing, point]
+      properties:
+        proFrame:
+          type: number
+          nullable: true
+        userFrame:
+          type: number
+          nullable: true
+        pro:
+          $ref: "#/components/schemas/ReleaseEventDetail"
+        user:
+          $ref: "#/components/schemas/ReleaseEventDetail"
+        timing:
+          $ref: "#/components/schemas/ReleaseTiming"
+        point:
+          $ref: "#/components/schemas/ReleasePoint"
+    ReleaseEventDetail:
+      type: object
+      additionalProperties: false
+      required: [frame, beforeFrame, exitFrame, method, status, source]
+      properties:
+        frame:
+          type: number
+          nullable: true
+          example: 128.5
+        beforeFrame:
+          type: number
+          nullable: true
+          example: 128
+        exitFrame:
+          type: number
+          nullable: true
+          example: 129
+        method:
+          type: string
+          example: ball_exit_midpoint_v1
+        status:
+          type: string
+          example: ready
+        source:
+          type: string
+          example: bright_or_motion_aligned_ball_blob
+    ReleaseTiming:
+      type: object
+      additionalProperties: false
+      required: [proPitchPercent, userPitchPercent, differencePercent, message]
+      properties:
+        proPitchPercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        userPitchPercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        differencePercent:
+          type: integer
+          nullable: true
+        message:
+          type: string
+    ReleasePoint:
+      type: object
+      additionalProperties: false
+      required: [difference, heightDifference, sideDifference, message]
+      properties:
+        difference:
+          type: number
+          nullable: true
+        heightDifference:
+          type: number
+          nullable: true
+        sideDifference:
+          type: number
+          nullable: true
+        message:
+          type: string
+    AnalysisFeedback:
+      type: object
+      additionalProperties: false
+      required: [good, bad]
+      properties:
+        good:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+        bad:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+    FeedbackItem:
+      type: object
+      additionalProperties: false
+      required: [phase, message, evidence]
+      properties:
+        phase:
+          type: string
+          enum: [windup, leg_lift, stride, acceleration, follow_through]
+        message:
+          type: string
+        evidence:
+          $ref: "#/components/schemas/FeedbackEvidence"
+    FeedbackEvidence:
+      type: object
+      additionalProperties: false
+      required: [proFrame, userFrame, proPhasePercent, userPhasePercent, differencePercent, difference]
+      properties:
+        proFrame:
+          type: number
+          nullable: true
+        userFrame:
+          type: number
+          nullable: true
+        proPhasePercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        userPhasePercent:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        differencePercent:
+          type: integer
+          nullable: true
+        difference:
+          type: number
+          nullable: true
+    SpeedResult:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ready
+        speedKmh:
+          type: number
+          nullable: true
+        speedMps:
+          type: number
+          nullable: true
+        releaseFrame:
+          type: integer
+          nullable: true
+          minimum: 0
+        arrivalFrame:
+          type: integer
+          nullable: true
+          minimum: 0
+        frameDelta:
+          type: integer
+          nullable: true
+        fps:
+          type: number
+          nullable: true
+          minimum: 0
+          exclusiveMinimum: true
+        targetDistanceM:
+          type: number
+          nullable: true
+          minimum: 0
+        releaseExtensionM:
+          type: number
+          nullable: true
+          minimum: 0
+        effectiveDistanceM:
+          type: number
+          nullable: true
+        flightTimeSec:
+          type: number
+          nullable: true
+        message:
+          type: string
+          nullable: true
+    VideoMeta:
+      type: object
+      properties:
+        videoId:
+          type: string
+        frameCount:
+          type: integer
+        fps:
+          type: number
+        width:
+          type: integer
+        height:
+          type: integer
+        durationSec:
+          type: number
+    PoseMeta:
+      type: object
+      properties:
+        poseModel:
+          type: string
+          example: MediaPipe Pose
+        status:
+          type: string
+          example: ready
+        frameCount:
+          type: integer
+        warning:
+          type: string
+          nullable: true
+    ErrorResponse:
+      type: object
+      required: [status, error]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: bad_request
+            message:
+              type: string
+              example: userVideo 파일이 필요합니다.
+            detail:
+              type: string
+              nullable: true

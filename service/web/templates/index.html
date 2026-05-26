@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integrated Pitch Lab</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Integrated Pitch Lab</p>
+        <h1>유사도 알고리즘 + 구속 측정 실험</h1>
+        <p>
+          Python 서버가 시작할 때 백엔드에서 프로 skeleton reference를 캐싱하고,
+          분석 요청 때는 사용자 영상만 받아 Top 3 프로 비교 결과를 JSON으로 반환합니다.
+        </p>
+      </section>
+
+      <section class="panel schema-panel">
+        <div>
+          <p class="eyebrow">Schema Check</p>
+          <h2>서비스 계약 확인</h2>
+          <p class="helper-text">
+            영상 처리 없이 서버의 응답 스키마 버전, 지원 카메라, 알고리즘, keypoints CSV 컬럼 수를 확인합니다.
+          </p>
+        </div>
+        <button type="button" id="schema-button" class="secondary-button">/api/schema 확인</button>
+      </section>
+
+      <section class="result-grid" id="schema-cards" hidden>
+        <article class="metric-card">
+          <span>스키마 버전</span>
+          <strong id="schema-version">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>지원 카메라</span>
+          <strong id="schema-camera">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>점수 범위</span>
+          <strong id="schema-score-scale">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>Phase 수</span>
+          <strong id="schema-phase-count">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>CSV 컬럼 수</span>
+          <strong id="schema-column-count">-</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <form id="analysis-form" class="grid-form">
+          <label>
+            사용자 영상
+            <input type="file" name="userVideo" accept="video/*" required />
+          </label>
+          <label>
+            구종
+            <select name="pitchType">
+              <option value="직구">직구</option>
+              <option value="슬라이더">슬라이더</option>
+              <option value="커브">커브</option>
+              <option value="체인지업">체인지업</option>
+            </select>
+          </label>
+          <label>
+            프로 선수 이름
+            <input name="playerName" value="류현진" />
+          </label>
+          <label>
+            최대 분석 프레임 수
+            <input name="maxFrames" type="number" min="1" placeholder="비워두면 전체" />
+          </label>
+          <label>
+            후방 실제 거리(m)
+            <input name="targetDistanceM" type="number" step="0.1" value="16.0" />
+          </label>
+          <label>
+            릴리즈 보정(m)
+            <input name="releaseExtensionM" type="number" step="0.1" value="1.5" />
+          </label>
+          <label>
+            사용자 릴리즈 프레임
+            <input name="userReleaseFrame" type="number" min="0" placeholder="선택" />
+          </label>
+          <label>
+            사용자 도착 프레임
+            <input name="userArrivalFrame" type="number" min="0" placeholder="선택" />
+          </label>
+          <button type="submit">분석 요청</button>
+        </form>
+      </section>
+
+      <section class="panel skeleton-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Fixed Step Preview</p>
+            <h2>리샘플링 Skeleton 겹쳐보기</h2>
+          </div>
+          <button type="button" id="preview-load-button" class="secondary-button">기본 조합 보기</button>
+        </div>
+        <form id="preview-upload-form" class="preview-upload-form">
+          <label>
+            pro_data 선택
+            <select id="preview-pro-select" name="proVideoOption">
+              <option value="">불러오는 중</option>
+            </select>
+          </label>
+          <label>
+            user_data 선택
+            <select id="preview-user-select" name="userVideoOption">
+              <option value="">불러오는 중</option>
+            </select>
+          </label>
+          <label>
+            선수 영상 업로드
+            <input type="file" name="proVideo" accept="video/*" />
+          </label>
+          <label>
+            사용자 영상 업로드
+            <input type="file" name="userVideo" accept="video/*" />
+          </label>
+          <label>
+            분석 프레임 제한
+            <input name="maxFrames" type="number" min="1" placeholder="비워두면 전체, 최소 360" />
+          </label>
+          <button type="submit">선택 영상으로 보기</button>
+        </form>
+        <div class="preview-layout">
+          <div class="preview-stage">
+            <canvas id="skeleton-canvas" width="960" height="620" aria-label="리샘플링 skeleton preview"></canvas>
+          </div>
+          <div class="preview-controls">
+            <label>
+              Phase
+              <select id="preview-phase-select"></select>
+            </label>
+            <label>
+              Step
+              <input id="preview-step-slider" type="range" min="0" max="0" value="0" />
+            </label>
+            <div class="preview-actions">
+              <button type="button" id="preview-play-button">재생</button>
+              <button type="button" id="preview-prev-button" class="secondary-button">이전</button>
+              <button type="button" id="preview-next-button" class="secondary-button">다음</button>
+            </div>
+            <dl class="preview-readout">
+              <div>
+                <dt>현재 step</dt>
+                <dd id="preview-step-text">-</dd>
+              </div>
+              <div>
+                <dt>자세 점수</dt>
+                <dd id="preview-score-text">-</dd>
+              </div>
+              <div>
+                <dt>프레임</dt>
+                <dd id="preview-frame-text">-</dd>
+              </div>
+              <div>
+                <dt>릴리즈 기준</dt>
+                <dd id="preview-release-text">-</dd>
+              </div>
+              <div>
+                <dt>소스</dt>
+                <dd id="preview-source-text">-</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div class="frame-map-panel">
+          <div class="panel-head">
+            <h2>프레임 맵</h2>
+            <span id="frame-map-summary">-</span>
+          </div>
+          <div class="frame-map-legend" aria-label="프레임 색상 기준">
+            <span><i class="legend-dot marker-good"></i>잘한 프레임</span>
+            <span><i class="legend-dot marker-bad"></i>못한 프레임</span>
+            <span><i class="legend-dot marker-release"></i>릴리즈</span>
+            <span><i class="legend-line"></i>현재 step</span>
+          </div>
+          <div id="frame-map" class="frame-map">
+            <p class="empty-state">프레임 맵 대기 중</p>
+          </div>
+        </div>
+        <div class="cocking-summary">
+          <div class="panel-head">
+            <h2>코킹 Proxy 프레임</h2>
+            <span id="cocking-status-text">-</span>
+          </div>
+          <div class="table-wrap">
+            <table class="cocking-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>선수 프레임</th>
+                  <th>사용자 프레임</th>
+                  <th>측정 기준</th>
+                </tr>
+              </thead>
+              <tbody id="cocking-table-body">
+                <tr>
+                  <td colspan="4">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="result-grid" id="result-cards" hidden>
+        <article class="metric-card">
+          <span>Top 1 유사도</span>
+          <strong id="overall-score">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>Top 1 Pro ID</span>
+          <strong id="top-pro-id">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>사용자 CSV</span>
+          <strong id="keypoints-size">-</strong>
+        </article>
+        <article class="metric-card">
+          <span>프레임 / FPS</span>
+          <strong id="video-summary">-</strong>
+        </article>
+      </section>
+
+      <section class="panel" id="phase-panel" hidden>
+        <div class="panel-head">
+          <h2>Phase별 유사도</h2>
+          <span id="pose-status">-</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>구간</th>
+                <th>점수</th>
+                <th>사용자 프레임</th>
+                <th>프로 프레임</th>
+              </tr>
+            </thead>
+            <tbody id="phase-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>응답 JSON</h2>
+          <span id="status-text">대기 중</span>
+        </div>
+        <pre id="schema-output" hidden>{}</pre>
+        <pre id="output">{}</pre>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

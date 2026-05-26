@@ -137,3 +137,62 @@ MediaPipe 2D 관절 좌표 추출
 
 - `/Users/sonjiwoon/capstone/Analysis_algorithm/outputs/exp6/phase_direction_report.md`
 - `/Users/sonjiwoon/capstone/Analysis_algorithm/experiments/exp07_phase_direction/README.md`
+
+정리 기준 실험 번호는 `exp07`입니다. 다만 초기 실행 산출물은 당시 스크립트 번호를 따라 `outputs/exp6`에 남아 있으므로, 산출물 경로와 실험 정리 번호를 분리해서 봅니다.
+
+### 8. 서비스 API 연동 스캐폴드
+
+exp07까지의 실험 결과를 바탕으로, 백엔드 서버가 호출할 Python 분석 서버 형태를 별도로 만들었습니다.
+
+현재 위치:
+
+- `service/server`
+- `service/web`
+
+이 단계의 목적은 최종 알고리즘 품질 검증이 아니라, 백엔드/프론트와 맞출 데이터 흐름을 고정하는 것입니다.
+
+현재 결정:
+
+- Python 서버는 시작 또는 캐시 갱신 시 백엔드의 프로 skeleton reference 목록을 받아 메모리에 캐싱합니다.
+- 분석 요청은 `userVideo`, `metadata`만 포함한 `multipart/form-data`로 받습니다.
+- 촬영 방향은 후면으로 고정하며, `metadata.cameraView`가 `rear`가 아니면 서버에서 거부합니다.
+- 원본 영상은 임시 처리 후 저장하지 않습니다.
+- 응답에는 `videoId`, `status`, `user_data`, `players` Top 3 결과만 포함합니다.
+- 백엔드는 사용자 `skeleton_data`를 DB에 저장하고, 프로 skeleton CSV는 별도 reference 데이터로 관리합니다.
+- 프론트에는 선택된 `players[].phaseScores`와 사용자/프로 skeleton CSV를 표시용 skeleton JSON으로 변환해서 내려주는 방향입니다.
+
+현재 구현 보강:
+
+- `service/server/analysis/phase.py`에 후면 영상 기준 keypoints 기반 phase detection v1을 추가했습니다.
+- `service/server/analysis/normalization.py`에 pelvis/torso/body-scale 기반 분석 좌표 생성을 추가했습니다.
+- `service/server/analysis/similarity.py`는 비율 기반 구간 대신 탐지된 phase 구간과 body-frame 좌표를 사용하도록 변경했습니다.
+- 공통 오류 응답을 `status:error` JSON 형태로 정리했습니다.
+- OpenAPI 초안과 5프레임 목업 응답을 추가했습니다.
+- `skeleton_data`를 프론트 표시용 `displayKeypoints`로 변환하는 참조 구현을 추가했습니다.
+
+실영상 검증 결과:
+
+- 기본 사용자 영상 `user_data/y1.mp4`와 류현진 프로 skeleton reference 1개로 exp08 검증을 실행했습니다.
+- 기본 응답 계약 검증과 strict 검증이 모두 통과했습니다.
+- Top 1 류현진 비교 결과는 `overallScore` 58.54입니다.
+- phase별 점수는 `leg_lift` 71.77, `stride` 60.44, `release` 29.35, `follow_through` 91.05입니다.
+- 사용자 skeleton CSV는 446프레임, 약 348KB, 60.025fps, 1080x1920으로 반환되었습니다.
+- 원본 영상은 검증 결과 폴더에 저장하지 않았습니다.
+
+이 단계의 한계:
+
+- phase detection v1은 휴리스틱이므로 릴리즈/팔로스루 경계가 영상별로 흔들릴 수 있습니다.
+- 일부 phase는 최소 길이 fallback으로 확장되므로 시각 검토가 필요합니다.
+- 프로 reference가 1개라 Top 3 정렬 검증은 아직 제한적입니다.
+- confidence 기반 phase 점수 가중 평균은 적용했지만, 다양한 영상의 점수 분포 검증은 다음 실험에서 진행해야 합니다.
+
+관련 문서:
+
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/service_api_contract.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/openapi.yaml`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/keypoints_csv_schema.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/scoring_policy.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/frontend_skeleton_rendering.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/backend_integration_guide.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/service_response_mock.md`
+- `/Users/sonjiwoon/capstone/Analysis_algorithm/docs/exp08_validation_plan.md`
