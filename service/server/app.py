@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from uuid import uuid4
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
@@ -27,9 +30,12 @@ WEB_ROOT = INTEGRATED_ROOT / "web"
 OPENAPI_SPEC_PATH = PROJECT_ROOT / "docs" / "openapi.yaml"
 CAPSTONE_ROOT = PROJECT_ROOT.parent
 PRO_VIDEO_DIR = CAPSTONE_ROOT / "pro_data"
+PREVIEW_PRO_VIDEO_DIR = Path(os.getenv("PREVIEW_PRO_VIDEO_DIR") or PRO_VIDEO_DIR / "crop")
+CROP2_PRO_VIDEO_DIR = Path(os.getenv("CROP2_PRO_VIDEO_DIR") or PRO_VIDEO_DIR / "crop2")
 USER_VIDEO_DIR = CAPSTONE_ROOT / "user_data"
 DEFAULT_RESAMPLING_PRO_KEYPOINTS = PROJECT_ROOT / "outputs" / "exp6" / "pro" / "keypoints.csv"
 DEFAULT_RESAMPLING_USER_KEYPOINTS = PROJECT_ROOT / "outputs" / "exp6" / "user" / "keypoints.csv"
+DEFAULT_PRO_SKELETON_DATA_FILE = PROJECT_ROOT / "outputs" / "pro_skeleton_data_20260601" / "pro_skeleton_data.json"
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".m4v"}
 PREVIEW_VIDEO_LIMIT = 20
 PREVIEW_ANALYSIS_MIN_FRAMES = 360
@@ -162,10 +168,10 @@ def experiment_video_options():
             "status": "ok",
             "limit": PREVIEW_VIDEO_LIMIT,
             "directories": {
-                "pro": str(PRO_VIDEO_DIR),
+                "pro": str(PREVIEW_PRO_VIDEO_DIR),
                 "user": str(USER_VIDEO_DIR),
             },
-            "proVideos": _video_options(PRO_VIDEO_DIR, limit=PREVIEW_VIDEO_LIMIT),
+            "proVideos": _video_options(PREVIEW_PRO_VIDEO_DIR, limit=PREVIEW_VIDEO_LIMIT),
             "userVideos": _video_options(
                 USER_VIDEO_DIR,
                 limit=PREVIEW_VIDEO_LIMIT,
@@ -173,6 +179,108 @@ def experiment_video_options():
             ),
         }
     )
+
+
+@app.get("/api/experiments/crop2-skeletons")
+def experiment_crop2_skeletons():
+    requested_max_frames = _parse_optional_int(request.args.get("maxFrames")) or PREVIEW_ANALYSIS_MIN_FRAMES
+    analysis_max_frames = _preview_analysis_max_frames(requested_max_frames)
+    items = []
+    for path in _video_paths(CROP2_PRO_VIDEO_DIR, limit=PREVIEW_VIDEO_LIMIT):
+        meta = inspect_video(path)
+        csv_text, pose_meta = extract_skeleton_data_csv_text(
+            path,
+            max_frames=analysis_max_frames,
+            sample_evenly=True,
+            focus_motion=True,
+        )
+        payload = build_resampling_preview_from_csv_text(
+            pro_csv_text=csv_text,
+            user_csv_text=csv_text,
+            sources={
+                "mode": "crop2_skeleton_video",
+                "proVideo": path.name,
+                "proSource": "pro_data/crop2",
+                "playerName": unicodedata.normalize("NFC", path.stem),
+            },
+            video_paths={"pro": path},
+        )
+        items.append(
+            {
+                "id": path.name,
+                "filename": path.name,
+                "label": unicodedata.normalize("NFC", path.stem),
+                "videoMeta": meta,
+                "poseMeta": pose_meta,
+                "videoSource": _preview_video_source_payload("crop2", path.name),
+                "phaseDetection": payload.get("phaseDetection", {}),
+                "releaseEvents": payload.get("releaseEvents", {}),
+                "cockingEvents": payload.get("cockingEvents", {}),
+                "warnings": payload.get("warnings", {}),
+                "phases": payload.get("phases", []),
+            }
+        )
+    return jsonify(
+        {
+            "status": "ok",
+            "directory": str(CROP2_PRO_VIDEO_DIR),
+            "requestedMaxFrames": requested_max_frames,
+            "analysisMaxFrames": analysis_max_frames,
+            "items": items,
+        }
+    )
+
+
+@app.get("/api/experiments/video/<side>/<path:filename>")
+def experiment_video_file(side: str, filename: str):
+    video_path = _preview_video_file_path(side, filename)
+    return send_file(video_path, conditional=True)
+
+
+@app.get("/api/experiments/pro-skeleton-options")
+def experiment_pro_skeleton_options():
+    items, source = _load_pro_skeleton_preview_items()
+    return jsonify(
+        {
+            "status": "ok",
+            "source": str(source) if source is not None else "cache",
+            "players": [_pro_skeleton_option(item) for item in items],
+        }
+    )
+
+
+@app.post("/api/experiments/pro-skeleton-preview")
+def experiment_pro_skeleton_preview():
+    items, source = _load_pro_skeleton_preview_items()
+    selected_id = str(request.form.get("proSkeletonOption") or request.form.get("proId") or "").strip()
+    item = _select_pro_skeleton_item(items, selected_id)
+    if item is None:
+        raise ValueError("선택한 pro skeleton 데이터를 찾지 못했습니다.")
+
+    csv_text = str(item.get("skeleton_data") or "")
+    if not csv_text.strip():
+        raise ValueError("선택한 pro skeleton 데이터가 비어 있습니다.")
+
+    meta = _pro_skeleton_video_meta(item)
+    payload = build_resampling_preview_from_csv_text(
+        pro_csv_text=csv_text,
+        user_csv_text=csv_text,
+        sources={
+            "mode": "pro_skeleton_data",
+            "source": str(source) if source is not None else "cache",
+            "proId": str(item.get("proId") or ""),
+            "playerName": str(item.get("playerName") or item.get("proId") or ""),
+            "skeletonDataId": str(item.get("skeletonDataId") or item.get("skeleton_data_id") or ""),
+            "sourceVideo": str(item.get("sourceVideo") or ""),
+        },
+    )
+    payload["method"] = "pro_skeleton_data_preview"
+    payload["videoMeta"] = {"pro": meta, "user": meta}
+    payload["videoSources"] = {
+        "pro": _preview_video_source_payload("pro", str(item.get("sourceVideo") or "")),
+        "user": None,
+    }
+    return jsonify(payload)
 
 
 @app.get("/api/experiments/resampling-preview")
@@ -189,11 +297,13 @@ def resampling_preview():
 def uploaded_resampling_preview():
     pro_upload = _optional_file("proVideo")
     user_upload = _optional_file("userVideo")
-    pro_selected_path = _selected_video_path("proVideoOption", PRO_VIDEO_DIR)
+    pro_selected_path = _selected_video_path("proVideoOption", PREVIEW_PRO_VIDEO_DIR)
     user_selected_path = _selected_video_path("userVideoOption", USER_VIDEO_DIR)
     metadata = _parse_metadata()
     requested_max_frames = _parse_optional_int(metadata.get("maxFrames") or request.form.get("maxFrames"))
     analysis_max_frames = _preview_analysis_max_frames(requested_max_frames)
+    pro_trim = _preview_trim_seconds(metadata, "pro")
+    user_trim = _preview_trim_seconds(metadata, "user")
     if pro_upload is None and pro_selected_path is None:
         raise ValueError("선수 영상 업로드 또는 pro_data 영상 선택이 필요합니다.")
     if user_upload is None and user_selected_path is None:
@@ -215,11 +325,17 @@ def uploaded_resampling_preview():
             pro_path,
             max_frames=analysis_max_frames,
             sample_evenly=True,
+            start_sec=pro_trim["startSec"],
+            end_sec=pro_trim["endSec"],
+            focus_motion=True,
         )
         user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(
             user_path,
             max_frames=analysis_max_frames,
             sample_evenly=True,
+            start_sec=user_trim["startSec"],
+            end_sec=user_trim["endSec"],
+            focus_motion=True,
         )
 
         payload = build_resampling_preview_from_csv_text(
@@ -250,6 +366,14 @@ def uploaded_resampling_preview():
         "analysisMaxFrames": analysis_max_frames,
         "minimumAnalysisFrames": PREVIEW_ANALYSIS_MIN_FRAMES,
     }
+    payload["previewTrim"] = {
+        "pro": pro_pose_meta.get("trim", {}),
+        "user": user_pose_meta.get("trim", {}),
+    }
+    payload["videoSources"] = {
+        "pro": _preview_video_source_payload("pro", pro_source["name"]) if pro_source["source"] != "upload" else None,
+        "user": _preview_video_source_payload("user", user_source["name"]) if user_source["source"] != "upload" else None,
+    }
     return jsonify(payload)
 
 
@@ -275,7 +399,11 @@ def analyze_similarity():
 
         user_meta = inspect_video(user_path)
         max_frames = _parse_optional_int(metadata.get("maxFrames"))
-        user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(user_path, max_frames=max_frames)
+        user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(
+            user_path,
+            max_frames=max_frames,
+            focus_motion=True,
+        )
         players = _rank_player_matches(user_csv_text, pro_skeleton_data, user_video_path=user_path)
 
     return jsonify(
@@ -336,6 +464,19 @@ def _save_temp_upload(upload: FileStorage, tmp_dir: Path, prefix: str) -> Path:
 
 
 def _video_options(directory: Path, *, limit: int, preferred_names: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    videos = _video_paths(directory, limit=limit, preferred_names=preferred_names)
+    return [
+        {
+            "id": path.name,
+            "filename": path.name,
+            "label": unicodedata.normalize("NFC", path.stem),
+            "sizeBytes": path.stat().st_size,
+        }
+        for path in videos[:limit]
+    ]
+
+
+def _video_paths(directory: Path, *, limit: int, preferred_names: tuple[str, ...] = ()) -> list[Path]:
     if not directory.exists():
         return []
     videos = [
@@ -345,15 +486,101 @@ def _video_options(directory: Path, *, limit: int, preferred_names: tuple[str, .
     ]
     preferred_order = {name: index for index, name in enumerate(preferred_names)}
     videos.sort(key=lambda path: (preferred_order.get(path.name, len(preferred_order)), _natural_sort_key(path.name)))
-    return [
-        {
-            "id": path.name,
-            "filename": path.name,
-            "label": path.stem,
-            "sizeBytes": path.stat().st_size,
+    return videos[:limit]
+
+
+def _load_pro_skeleton_preview_items() -> tuple[list[dict[str, Any]], Path | None]:
+    candidates = []
+    env_file = os.getenv("PRO_SKELETON_DATA_FILE", "").strip()
+    if env_file:
+        candidates.append(Path(env_file))
+    candidates.append(DEFAULT_PRO_SKELETON_DATA_FILE)
+
+    for path in candidates:
+        if not path.exists() or not path.is_file():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        items = _extract_pro_skeleton_items(payload)
+        if items:
+            return items, path
+
+    return get_cached_pro_skeletons(), None
+
+
+def _extract_pro_skeleton_items(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        values = payload
+    elif isinstance(payload, dict):
+        values = []
+        for key in ("pro_skeleton_data", "proSkeletonData", "pro_keypoints", "players", "items", "data"):
+            candidate = payload.get(key)
+            if isinstance(candidate, list):
+                values = candidate
+                break
+    else:
+        values = []
+
+    items = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        pro_id = item.get("proId") or item.get("pro_id") or item.get("id")
+        csv_text = item.get("skeleton_data") or item.get("skeletonData") or item.get("keypointsCsvText")
+        if not pro_id or not isinstance(csv_text, str) or not csv_text.strip():
+            continue
+        normalized = dict(item)
+        normalized["proId"] = str(pro_id)
+        normalized["skeleton_data"] = csv_text
+        if "playerName" not in normalized and "player_name" in normalized:
+            normalized["playerName"] = normalized["player_name"]
+        if "skeletonDataId" not in normalized and "skeleton_data_id" in normalized:
+            normalized["skeletonDataId"] = normalized["skeleton_data_id"]
+        items.append(normalized)
+    return items
+
+
+def _pro_skeleton_option(item: dict[str, Any]) -> dict[str, Any]:
+    pro_id = str(item.get("proId") or "")
+    player_name = str(item.get("playerName") or pro_id)
+    return {
+        "id": pro_id,
+        "label": player_name,
+        "proId": pro_id,
+        "playerName": player_name,
+        "skeletonDataId": item.get("skeletonDataId") or item.get("skeleton_data_id"),
+        "frameCount": item.get("frameCount"),
+        "fps": item.get("fps"),
+        "resolution": item.get("resolution"),
+        "sourceVideo": item.get("sourceVideo"),
+    }
+
+
+def _select_pro_skeleton_item(items: list[dict[str, Any]], selected_id: str) -> dict[str, Any] | None:
+    if not items:
+        return None
+    if not selected_id:
+        return items[0]
+    for item in items:
+        identifiers = {
+            str(item.get("proId") or ""),
+            str(item.get("skeletonDataId") or item.get("skeleton_data_id") or ""),
+            str(item.get("sourceVideo") or ""),
         }
-        for path in videos[:limit]
-    ]
+        if selected_id in identifiers:
+            return item
+    return None
+
+
+def _pro_skeleton_video_meta(item: dict[str, Any]) -> dict[str, Any]:
+    resolution = str(item.get("resolution") or "0x0")
+    width_text, _, height_text = resolution.partition("x")
+    return {
+        "videoId": item.get("sourceVideo") or item.get("proId"),
+        "frameCount": item.get("frameCount"),
+        "fps": item.get("fps"),
+        "width": _parse_optional_int(width_text) or 0,
+        "height": _parse_optional_int(height_text) or 0,
+    }
 
 
 def _natural_sort_key(value: str) -> list[Any]:
@@ -365,15 +592,59 @@ def _selected_video_path(field_name: str, directory: Path) -> Path | None:
     selected_name = str(request.form.get(field_name) or "").strip()
     if not selected_name:
         return None
-    if Path(selected_name).name != selected_name:
-        raise ValueError(f"{field_name} 값은 파일명만 허용합니다.")
-    candidate = (directory / selected_name).resolve()
-    base = directory.resolve()
-    if not candidate.is_relative_to(base) or not candidate.exists() or not candidate.is_file():
+    candidate = _resolve_video_filename(directory, selected_name)
+    if candidate is None:
         raise ValueError(f"{field_name} 영상이 폴더 안에 없습니다.")
-    if candidate.suffix.lower() not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"{field_name}은 mp4/mov/avi/m4v만 지원합니다.")
     return candidate
+
+
+def _preview_video_file_path(side: str, filename: str) -> Path:
+    directories = {"pro": PREVIEW_PRO_VIDEO_DIR, "user": USER_VIDEO_DIR, "crop2": CROP2_PRO_VIDEO_DIR}
+    directory = directories.get(side)
+    if directory is None:
+        raise ValueError("side는 pro, user, crop2만 허용합니다.")
+    video_path = _resolve_video_filename(directory, filename)
+    if video_path is None:
+        raise ValueError("요청한 영상을 찾지 못했습니다.")
+    return video_path
+
+
+def _resolve_video_filename(directory: Path, filename: str) -> Path | None:
+    selected_name = str(filename or "").strip()
+    if not selected_name or Path(selected_name).name != selected_name:
+        return None
+    if Path(selected_name).suffix.lower() not in ALLOWED_EXTENSIONS:
+        return None
+
+    base = directory.resolve()
+    candidate = (directory / selected_name).resolve()
+    if candidate.is_relative_to(base) and candidate.exists() and candidate.is_file():
+        return candidate
+
+    normalized_name = unicodedata.normalize("NFC", selected_name)
+    if not directory.exists():
+        return None
+    for path in directory.iterdir():
+        if not path.is_file() or path.suffix.lower() not in ALLOWED_EXTENSIONS:
+            continue
+        if unicodedata.normalize("NFC", path.name) == normalized_name:
+            return path.resolve()
+    return None
+
+
+def _preview_video_source_payload(side: str, filename: str) -> dict[str, str] | None:
+    if not filename:
+        return None
+    try:
+        video_path = _preview_video_file_path(side, filename)
+    except ValueError:
+        return None
+    version = video_path.stat().st_mtime_ns
+    return {
+        "side": side,
+        "filename": filename,
+        "url": f"/api/experiments/video/{side}/{quote(filename)}?v={version}",
+    }
 
 
 def _preview_source(*, upload: FileStorage | None, selected_path: Path | None, folder_label: str) -> dict[str, str]:
@@ -402,6 +673,16 @@ def _preview_analysis_max_frames(requested_max_frames: int | None) -> int | None
     if requested_max_frames is None:
         return None
     return max(requested_max_frames, PREVIEW_ANALYSIS_MIN_FRAMES)
+
+
+def _preview_trim_seconds(metadata: dict[str, Any], side: str) -> dict[str, float | None]:
+    start_value = metadata.get(f"{side}TrimStartSec") or request.form.get(f"{side}TrimStartSec")
+    end_value = metadata.get(f"{side}TrimEndSec") or request.form.get(f"{side}TrimEndSec")
+    start_sec = _parse_optional_float(start_value)
+    end_sec = _parse_optional_float(end_value)
+    if start_sec is not None and end_sec is not None and end_sec <= start_sec:
+        raise ValueError(f"{side} 트림 끝초는 시작초보다 커야 합니다.")
+    return {"startSec": start_sec, "endSec": end_sec}
 
 
 def _parse_metadata() -> dict:
@@ -443,6 +724,16 @@ def _parse_optional_int(value) -> int | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
+
+
+def _parse_optional_float(value) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def _rank_player_matches(

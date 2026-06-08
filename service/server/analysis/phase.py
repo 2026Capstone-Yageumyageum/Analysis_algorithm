@@ -61,12 +61,17 @@ def detect_pitch_phases(
     minimum_phase_gap = max(3, int(active_frame_count * 0.025))
     minimum_stride_gap = max(minimum_phase_gap, int(active_frame_count * 0.07))
     stride_search_end = min(last_valid_idx + 1, max(leg_lift_idx + 1, first_valid_idx + int(active_frame_count * 0.90)))
+    release_override_idx = _release_override_index(normalized_pose, release_event_override, fallback=last_valid_idx)
+    use_release_bounded_stride = release_override_idx is not None and release_override_idx > leg_lift_idx
+    if use_release_bounded_stride:
+        stride_search_end = min(stride_search_end, max(leg_lift_idx + 1, release_override_idx + 1))
     stride_candidates = np.arange(leg_lift_idx, stride_search_end)
     stride_idx = _choose_stride_foot_landing(
         normalized_pose,
         stride_candidates,
         stride_foot,
         fallback=min(last_valid_idx, leg_lift_idx + max(minimum_stride_gap, int(active_frame_count * 0.20))),
+        prefer_release_bounded_landing=use_release_bounded_stride,
     )
 
     stride_was_expanded = False
@@ -266,17 +271,78 @@ def _choose_highest_joint(df: pd.DataFrame, candidate_indices: np.ndarray, joint
     return _choose(candidates, image_y, mode="min", fallback=fallback)
 
 
-def _choose_stride_foot_landing(df: pd.DataFrame, candidate_indices: np.ndarray, joint: str, fallback: int) -> int:
+def _choose_stride_foot_landing(
+    df: pd.DataFrame,
+    candidate_indices: np.ndarray,
+    joint: str,
+    fallback: int,
+    *,
+    prefer_release_bounded_landing: bool = False,
+) -> int:
     candidates = _confident_candidates(df, candidate_indices, joint)
     if len(candidates) == 0:
         return int(fallback)
 
     foot_y_series = _joint_image_y(df, joint).astype(float).rolling(window=5, center=True, min_periods=1).median()
     foot_y = foot_y_series.iloc[candidates]
+    if prefer_release_bounded_landing:
+        return _choose(candidates, foot_y, mode="max", fallback=fallback)
+
     valid_y = foot_y.replace([np.inf, -np.inf], np.nan).dropna()
     if valid_y.empty:
         return int(fallback)
+
+    # Foot contact should be the first settled landing point, not the latest
+    # frame where the stride foot happens to be lowest during acceleration.
+    start_y = float(valid_y.iloc[0])
+    landing_y = float(valid_y.max())
+    descent_range = landing_y - start_y
+    if descent_range <= 0.015:
+        return _choose(candidates, foot_y, mode="max", fallback=fallback)
+
+    landing_threshold = start_y + (descent_range * 0.86)
+    velocity = foot_y_series.diff().rolling(window=5, center=True, min_periods=1).median().abs().iloc[candidates]
+    valid_velocity = velocity.replace([np.inf, -np.inf], np.nan).dropna()
+    velocity_threshold = 0.008
+    if not valid_velocity.empty:
+        velocity_threshold = max(0.006, min(0.018, float(valid_velocity.quantile(0.35)) * 1.35))
+
+    candidate_array = np.asarray(candidates)
+    y_values = foot_y.to_numpy(dtype=float)
+    velocity_values = velocity.to_numpy(dtype=float)
+    settled = candidate_array[
+        np.isfinite(y_values)
+        & np.isfinite(velocity_values)
+        & (y_values >= landing_threshold)
+        & (velocity_values <= velocity_threshold)
+    ]
+    if len(settled):
+        return int(settled[0])
+
+    landed = candidate_array[np.isfinite(y_values) & (y_values >= landing_threshold)]
+    if len(landed):
+        return int(landed[0])
+
     return _choose(candidates, foot_y, mode="max", fallback=fallback)
+
+
+def _release_override_index(df: pd.DataFrame, override: dict[str, Any] | None, fallback: int) -> int | None:
+    if override is None:
+        return None
+    release_frame = _optional_frame_value(
+        _first_present(
+            override,
+            "releaseFrame",
+            "frame",
+            "exitFrame",
+            "afterFrame",
+            "firstDetachedFrame",
+            "firstBallOutFrame",
+        )
+    )
+    if release_frame is None:
+        return None
+    return _index_at_or_before_frame(df, float(release_frame), fallback=fallback)
 
 
 def _choose_highest_release_wrist(df: pd.DataFrame, candidate_indices: np.ndarray, joint: str, fallback: int) -> int:
