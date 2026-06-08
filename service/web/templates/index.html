@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Integrated Pitch Lab</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=dtw-alignment-experiment-20260608" />
   </head>
   <body>
     <main class="shell">
@@ -127,8 +127,49 @@
             분석 프레임 제한
             <input name="maxFrames" type="number" min="1" placeholder="비워두면 전체, 최소 360" />
           </label>
+          <label>
+            선수 시작초
+            <input name="proTrimStartSec" type="number" min="0" step="0.01" placeholder="0" />
+          </label>
+          <label>
+            선수 끝초
+            <input name="proTrimEndSec" type="number" min="0" step="0.01" placeholder="비워두면 끝까지" />
+          </label>
+          <label>
+            사용자 시작초
+            <input name="userTrimStartSec" type="number" min="0" step="0.01" placeholder="0" />
+          </label>
+          <label>
+            사용자 끝초
+            <input name="userTrimEndSec" type="number" min="0" step="0.01" placeholder="비워두면 끝까지" />
+          </label>
           <button type="submit">선택 영상으로 보기</button>
         </form>
+        <form id="pro-skeleton-form" class="preview-upload-form compact-preview-form">
+          <label>
+            DB skeleton 선택
+            <select id="preview-pro-skeleton-select" name="proSkeletonOption">
+              <option value="">불러오는 중</option>
+            </select>
+          </label>
+          <button type="submit" class="secondary-button">DB skeleton 보기</button>
+        </form>
+        <div id="preview-video-panel" class="preview-video-panel" hidden>
+          <article class="preview-video-card" data-video-card="pro">
+            <header>
+              <strong>선수 영상</strong>
+              <span id="preview-pro-video-frame">-</span>
+            </header>
+            <video id="preview-pro-video" controls playsinline preload="metadata"></video>
+          </article>
+          <article class="preview-video-card" data-video-card="user">
+            <header>
+              <strong>사용자 영상</strong>
+              <span id="preview-user-video-frame">-</span>
+            </header>
+            <video id="preview-user-video" controls playsinline preload="metadata"></video>
+          </article>
+        </div>
         <div class="preview-layout">
           <div class="preview-stage">
             <canvas id="skeleton-canvas" width="960" height="620" aria-label="리샘플링 skeleton preview"></canvas>
@@ -138,6 +179,40 @@
               Phase
               <select id="preview-phase-select"></select>
             </label>
+            <fieldset class="coordinate-mode-field">
+              <legend>좌표 기준</legend>
+              <div class="segmented-control four-options" role="radiogroup" aria-label="스켈레톤 좌표 기준">
+                <label>
+                  <input type="radio" name="previewCoordinateMode" value="sourceNormalized" checked />
+                  <span>원본기반 정규화</span>
+                </label>
+                <label>
+                  <input type="radio" name="previewCoordinateMode" value="analysis" />
+                  <span>분석 좌표</span>
+                </label>
+                <label>
+                  <input type="radio" name="previewCoordinateMode" value="stationaryFoot" />
+                  <span>분석+고정발</span>
+                </label>
+                <label>
+                  <input type="radio" name="previewCoordinateMode" value="display" />
+                  <span>원본-골반</span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset class="coordinate-mode-field">
+              <legend>정렬 방식</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="스켈레톤 정렬 방식">
+                <label>
+                  <input type="radio" name="previewAlignmentMode" value="fixed" checked />
+                  <span>Fixed step</span>
+                </label>
+                <label>
+                  <input type="radio" name="previewAlignmentMode" value="dtw" />
+                  <span>DTW 정렬</span>
+                </label>
+              </div>
+            </fieldset>
             <label>
               Step
               <input id="preview-step-slider" type="range" min="0" max="0" value="0" />
@@ -161,6 +236,10 @@
                 <dd id="preview-frame-text">-</dd>
               </div>
               <div>
+                <dt>정렬</dt>
+                <dd id="preview-alignment-text">-</dd>
+              </div>
+              <div>
                 <dt>릴리즈 기준</dt>
                 <dd id="preview-release-text">-</dd>
               </div>
@@ -169,6 +248,35 @@
                 <dd id="preview-source-text">-</dd>
               </div>
             </dl>
+          </div>
+        </div>
+        <div class="full-comparison-panel">
+          <div class="panel-head">
+            <h2>전체 비교 영상</h2>
+            <span id="full-comparison-summary">-</span>
+          </div>
+          <div class="full-comparison-stage">
+            <canvas id="full-comparison-canvas" width="960" height="520" aria-label="전체 phase skeleton 비교 영상"></canvas>
+          </div>
+          <div class="full-comparison-controls">
+            <button type="button" id="full-comparison-play-button">전체 재생</button>
+            <input id="full-comparison-slider" type="range" min="0" max="0" value="0" />
+            <span id="full-comparison-frame-text">-</span>
+          </div>
+          <div id="full-comparison-phase-track" class="full-comparison-phase-track">
+            <p class="empty-state">전체 비교 영상 대기 중</p>
+          </div>
+          <div id="alignment-summary" class="alignment-summary">
+            <p class="empty-state">정렬 실험 요약 대기 중</p>
+          </div>
+        </div>
+        <div class="phase-skeleton-panel">
+          <div class="panel-head">
+            <h2>영상별 Phase Skeleton</h2>
+            <span id="phase-skeleton-summary">-</span>
+          </div>
+          <div id="phase-skeleton-gallery" class="phase-skeleton-gallery">
+            <p class="empty-state">phase skeleton 대기 중</p>
           </div>
         </div>
         <div class="frame-map-panel">
@@ -258,8 +366,28 @@
         <pre id="schema-output" hidden>{}</pre>
         <pre id="output">{}</pre>
       </section>
+
+      <section class="panel crop2-review-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Pro DB 준비 검수</p>
+            <h2>pro_data/crop2 전체 Skeleton</h2>
+          </div>
+          <span id="crop2-review-status">대기 중</span>
+        </div>
+        <div class="crop2-review-actions">
+          <label>
+            최대 분석 프레임
+            <input id="crop2-review-max-frames" type="number" min="45" value="360" />
+          </label>
+          <button type="button" id="crop2-review-load-button">crop2 전체 불러오기</button>
+        </div>
+        <div id="crop2-review-grid" class="crop2-review-grid">
+          <p class="empty-state">crop2 skeleton 검수 대기 중</p>
+        </div>
+      </section>
     </main>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=dtw-alignment-experiment-20260608b"></script>
   </body>
 </html>
