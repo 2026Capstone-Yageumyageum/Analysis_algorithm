@@ -73,7 +73,7 @@ OpenAPI YAML 원문을 반환합니다.
 
 서버 환경변수 기준으로 프로 skeleton reference를 다시 로드합니다.
 
-### `POST /api/analyze/similarity`
+### `POST /api/analyze`
 
 `multipart/form-data` 요청입니다.
 

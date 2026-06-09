@@ -130,7 +130,7 @@ def schema():
             "request": {
                 "similarity": {
                     "method": "POST",
-                    "path": "/api/analyze/similarity",
+                    "path": "/api/analyze",
                     "contentType": "multipart/form-data",
                     "requiredFiles": ["userVideo"],
                     "requiredFields": [],
@@ -377,7 +377,7 @@ def uploaded_resampling_preview():
     return jsonify(payload)
 
 
-@app.post("/api/analyze/similarity")
+@app.post("/api/analyze")
 def analyze_similarity():
     user_upload = _required_file("userVideo")
     pro_skeleton_data = get_cached_pro_skeletons()

@@ -60,7 +60,7 @@ POST /api/pro-skeleton-cache/refresh
 엔드포인트:
 
 ```http
-POST /api/analyze/similarity
+POST /api/analyze
 Content-Type: multipart/form-data
 ```
 

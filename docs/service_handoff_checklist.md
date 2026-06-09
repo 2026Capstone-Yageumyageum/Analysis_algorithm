@@ -14,7 +14,7 @@
 ## Python 분석 서버 담당
 
 - `GET /api/schema`를 제공합니다.
-- `POST /api/analyze/similarity`를 제공합니다.
+- `POST /api/analyze`를 제공합니다.
 - `multipart/form-data`의 `userVideo`, `metadata`를 받습니다.
 - 서버 시작 시 `PRO_SKELETON_DATA_URL` 또는 `PRO_SKELETON_DATA_FILE`에서 프로 skeleton reference 목록을 로드합니다.
 - `metadata.cameraView`가 비어 있거나 `rear`인 경우만 허용합니다.
