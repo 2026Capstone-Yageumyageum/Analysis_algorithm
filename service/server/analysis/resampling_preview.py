@@ -3,7 +3,7 @@ from __future__ import annotations
 from io import StringIO
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import pandas as pd
@@ -62,7 +62,7 @@ PHASE_STEP_COUNTS = {
     "follow_through": 35,
 }
 MIN_CONFIDENCE = 0.05
-POSE_DISTANCE_SIGMA = 0.55
+POSE_DISTANCE_SIGMA: Final = 0.25
 FRAME_MARKER_GOOD_THRESHOLD = 78.0
 FRAME_MARKER_BAD_THRESHOLD = 68.0
 FRAME_MARKER_LIMIT = 3
