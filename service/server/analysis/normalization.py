@@ -280,11 +280,13 @@ def _build_body_scale(
         keypoints_df["right_hip_x_smooth"],
         keypoints_df["right_hip_y_smooth"],
     )
+    body_height = _body_height_proxy(keypoints_df)
     raw_scale = pd.concat(
         [
             torso,
-            shoulder_width * 1.6,
-            hip_width * 2.0,
+            shoulder_width * 3.0,
+            hip_width * 2.4,
+            body_height * 0.55,
         ],
         axis=1,
     ).max(axis=1)
@@ -293,20 +295,40 @@ def _build_body_scale(
     if valid_scale.empty:
         valid_scale = raw_scale.replace([np.inf, -np.inf], np.nan).dropna()
     stable_scale = float(valid_scale.median()) if not valid_scale.empty else 1.0
+    if not np.isfinite(stable_scale) or abs(stable_scale) <= 1e-9:
+        stable_scale = 1.0
+    cleaned_raw_scale = raw_scale.replace([np.inf, -np.inf], np.nan).interpolate(limit_direction="both").fillna(stable_scale)
     body_scale = pd.Series(stable_scale, index=keypoints_df.index, dtype=float)
     return (
-        raw_scale.replace([np.inf, -np.inf], np.nan).interpolate(limit_direction="both").fillna(stable_scale),
+        cleaned_raw_scale,
         body_scale,
         {
-            "version": "pelvis_stable_body_scale_2d_v2",
-            "rawScale": "max(torso, shoulder_width * 1.6, hip_width * 2.0)",
+            "version": "pelvis_fixed_height_body_scale_2d_v5",
+            "rawScale": "max(torso, shoulder_width * 3.0, hip_width * 2.4, body_height * 0.55)",
             "stableScale": round(stable_scale, 6),
-            "stableScaleStatistic": "median(rawScale over valid frames)",
+            "stableScaleStatistic": "median(rawScale over valid frames), reused for every frame",
             "origin": "pelvis_center",
             "mirror": "left_handed_pitchers",
             "validFrameCount": int(len(valid_scale)),
         },
     )
+
+
+def _body_height_proxy(keypoints_df: pd.DataFrame) -> pd.Series:
+    head_y = _numeric_column(keypoints_df, "nose_y_smooth")
+    left_shoulder_y = _numeric_column(keypoints_df, "left_shoulder_y_smooth")
+    right_shoulder_y = _numeric_column(keypoints_df, "right_shoulder_y_smooth")
+    top_y = pd.concat([head_y, left_shoulder_y, right_shoulder_y], axis=1).min(axis=1)
+    lower_y = pd.concat(
+        [
+            _numeric_column(keypoints_df, "left_ankle_y_smooth"),
+            _numeric_column(keypoints_df, "right_ankle_y_smooth"),
+            _numeric_column(keypoints_df, "left_foot_index_y_smooth"),
+            _numeric_column(keypoints_df, "right_foot_index_y_smooth"),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return (lower_y - top_y).abs()
 
 
 def _valid_scale_confidence(keypoints_df: pd.DataFrame) -> pd.Series:

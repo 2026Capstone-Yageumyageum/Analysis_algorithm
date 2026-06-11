@@ -75,7 +75,7 @@ PY
 
 echo "[4/7] Requesting similarity analysis"
 curl -sS \
-  -X POST "${SERVER_URL}/api/analyze/similarity" \
+  -X POST "${SERVER_URL}/api/analyze" \
   -F "userVideo=@${USER_VIDEO}" \
   -F 'metadata={
     "videoId":"y1",

@@ -49,7 +49,7 @@ http://127.0.0.1:5020
 
 ```bash
 curl -sS \
-  -X POST http://127.0.0.1:5020/api/analyze/similarity \
+  -X POST http://127.0.0.1:5020/api/analyze \
   -F userVideo=@/Users/sonjiwoon/capstone/user_data/y1.mp4 \
   -F 'metadata={
     "videoId":"y1",

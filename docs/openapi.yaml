@@ -83,7 +83,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProSkeletonCacheStatus"
-  /api/analyze/similarity:
+  /api/analyze:
     post:
       summary: 사용자 영상과 캐싱된 프로 skeleton 목록의 투구폼 유사도 분석
       description: >
