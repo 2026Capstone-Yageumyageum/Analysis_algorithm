@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,33 @@ PHASE_WEIGHTS = {
     "acceleration": 0.30,
     "follow_through": 0.15,
 }
+
+
+def estimate_user_release_event(
+    user_csv_text: str,
+    user_video_path: Path | None,
+) -> dict[str, Any] | None:
+    """사용자 영상의 릴리즈 이벤트를 한 번만 계산한다.
+
+    릴리즈 이벤트는 비교 대상 프로와 무관하게 동일하므로, 프로별 루프에서
+    매번 영상을 다시 디코딩(cv2.VideoCapture)하지 않도록 미리 한 번 구해
+    compute_similarity(release_events=...)로 재사용한다.
+    """
+    if user_video_path is None:
+        return None
+    user_df = pd.read_csv(StringIO(user_csv_text))
+    if user_df.empty:
+        return None
+    user_pose = build_body_frame_pose(user_df)
+    if user_pose.table.empty:
+        return None
+    preliminary_user_phases = detect_pitch_phases(user_pose.table)
+    return _estimate_release_event(
+        video_path=user_video_path,
+        keypoints=user_df,
+        pose_table=user_pose.table,
+        preliminary_phases=preliminary_user_phases,
+    )
 
 
 def compute_similarity(
@@ -118,6 +146,10 @@ def _estimate_release_event(
     preliminary_phases: Any,
 ) -> dict[str, Any] | None:
     if video_path is None:
+        return None
+    # 공 픽셀 기반 릴리즈 "정밀화"는 고해상도 프레임을 랜덤 시킹하며 처리해 매우 비싸다(수십~백수십초).
+    # BALL_RELEASE_DETECTION=0 이면 건너뛰고 phase 기반 릴리즈로 폴백한다(타이밍 정밀도만 소폭 하락).
+    if os.getenv("BALL_RELEASE_DETECTION", "1").strip() == "0":
         return None
     try:
         return estimate_ball_release_event(

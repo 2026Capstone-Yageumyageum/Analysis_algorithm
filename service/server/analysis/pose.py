@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 from io import StringIO
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+
+
+def _pose_model_complexity() -> int:
+    """MediaPipe Pose 정확도/속도 트레이드오프. 0=lite(가장 빠름), 1=full(기본), 2=heavy(느림).
+
+    CPU에서 추론이 병목이면 POSE_MODEL_COMPLEXITY=0 으로 2~3배 빠르게 만들 수 있다.
+    """
+    raw = os.getenv("POSE_MODEL_COMPLEXITY", "1").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 1
+    return value if value in (0, 1, 2) else 1
 
 from analysis.pose_coordinates import normalize_frame_point
 
@@ -155,19 +169,28 @@ def _extract_with_mediapipe(
     rows: list[dict[str, Any]] = []
     previous_values = _default_joint_values()
 
+    target_set = set(target_frame_indices)
+    max_target = target_frame_indices[-1] if target_frame_indices else -1
     with pose_module.Pose(
         static_image_mode=False,
-        model_complexity=1,
+        model_complexity=_pose_model_complexity(),
         enable_segmentation=False,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     ) as pose:
-        for frame_index in target_frame_indices:
-            if sample_evenly:
-                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        # 시킹(capture.set) 없이 순차로 읽으며 타깃 프레임만 추론한다.
+        # 임의 프레임 시킹은 키프레임부터 재디코딩해 매우 느리므로 순차 읽기로 대체.
+        current_index = -1
+        while True:
             ok, frame = capture.read()
             if not ok:
+                break
+            current_index += 1
+            if current_index > max_target:
+                break
+            if current_index not in target_set:
                 continue
+            frame_index = current_index
 
             frame_height, frame_width = frame.shape[:2]
             roi_frame, roi = _crop_frame(frame, motion_roi)

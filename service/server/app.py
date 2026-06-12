@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ from werkzeug.utils import secure_filename
 from analysis.pro_cache import cache_status, get_cached_pro_skeletons, refresh_pro_skeleton_cache
 from analysis.pose import CSV_COLUMNS, extract_skeleton_data_csv_text
 from analysis.resampling_preview import build_resampling_preview, build_resampling_preview_from_csv_text
-from analysis.similarity import compute_similarity
+from analysis.similarity import compute_similarity, estimate_user_release_event
 from analysis.speed import compute_tof_speed
 from analysis.video import inspect_video
 
@@ -312,7 +313,7 @@ def uploaded_resampling_preview():
     pro_source = _preview_source(upload=pro_upload, selected_path=pro_selected_path, folder_label="pro_data")
     user_source = _preview_source(upload=user_upload, selected_path=user_selected_path, folder_label="user_data")
 
-    with tempfile.TemporaryDirectory(prefix="resampling_preview_") as tmp_dir_name:
+    with tempfile.TemporaryDirectory(prefix="resampling_preview_", ignore_cleanup_errors=True) as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
         pro_path = _save_temp_upload(pro_upload, tmp_dir, "pro") if pro_upload else pro_selected_path
         user_path = _save_temp_upload(user_upload, tmp_dir, "user") if user_upload else user_selected_path
@@ -393,18 +394,31 @@ def analyze_similarity():
         or f"user_skeleton_{uuid4().hex[:10]}"
     )
 
-    with tempfile.TemporaryDirectory(prefix="integrated_pitch_") as tmp_dir_name:
+    with tempfile.TemporaryDirectory(prefix="integrated_pitch_", ignore_cleanup_errors=True) as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
         user_path = _save_temp_upload(user_upload, tmp_dir, "user")
 
         user_meta = inspect_video(user_path)
         max_frames = _parse_optional_int(metadata.get("maxFrames"))
+        _t_extract = time.perf_counter()
         user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(
             user_path,
             max_frames=max_frames,
+            sample_evenly=True,  # max_frames 지정 시 영상 전체에서 균등 샘플링 (뒷부분 투구 잘림 방지)
             focus_motion=True,
         )
+        _extract_sec = time.perf_counter() - _t_extract
+        _t_rank = time.perf_counter()
         players = _rank_player_matches(user_csv_text, pro_skeleton_data, user_video_path=user_path)
+        _rank_sec = time.perf_counter() - _t_rank
+        print(
+            f"[TIMING] pose_extract={_extract_sec:.1f}s "
+            f"(frames={user_pose_meta.get('frameCount')}, source={user_pose_meta.get('sourceFrameCount')}, "
+            f"res={_format_resolution(user_meta)}) | "
+            f"rank={_rank_sec:.1f}s (pros={len(pro_skeleton_data)}) | "
+            f"total={_extract_sec + _rank_sec:.1f}s",
+            flush=True,
+        )
 
     return jsonify(
         {
@@ -426,7 +440,7 @@ def analyze_similarity():
 def measure_speed():
     upload = _required_file("video")
     metadata = _parse_metadata()
-    with tempfile.TemporaryDirectory(prefix="integrated_speed_") as tmp_dir_name:
+    with tempfile.TemporaryDirectory(prefix="integrated_speed_", ignore_cleanup_errors=True) as tmp_dir_name:
         video_path = _save_temp_upload(upload, Path(tmp_dir_name), "speed")
         video_meta = inspect_video(video_path)
         speed_result = compute_tof_speed(metadata, detected_fps=float(video_meta.get("fps") or 60.0))
@@ -743,8 +757,19 @@ def _rank_player_matches(
     user_video_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
+    # 사용자 릴리즈 이벤트는 프로와 무관하게 동일하므로 한 번만 계산해 재사용한다.
+    # (기존에는 프로마다 compute_similarity가 user_video를 다시 디코딩해 N배 느렸음)
+    _t_rel = time.perf_counter()
+    user_release_event = estimate_user_release_event(user_csv_text, user_video_path)
+    _rel_sec = time.perf_counter() - _t_rel
+    user_release_events = {"user": user_release_event} if user_release_event else None
+    _t_loop = time.perf_counter()
     for item in pro_skeleton_data:
-        similarity = compute_similarity(user_csv_text, item["skeleton_data"], user_video_path=user_video_path)
+        similarity = compute_similarity(
+            user_csv_text,
+            item["skeleton_data"],
+            release_events=user_release_events,
+        )
         matches.append(
             {
                 "analysisId": item.get("analysisId") or item.get("analysis_id"),
@@ -755,6 +780,14 @@ def _rank_player_matches(
                 "feedback": similarity.get("feedback", {"good": [], "bad": []}),
             }
         )
+
+    _loop_sec = time.perf_counter() - _t_loop
+    _pros = len(pro_skeleton_data) or 1
+    print(
+        f"[TIMING] rank breakdown: user_release(1x)={_rel_sec:.1f}s | "
+        f"per-pro loop={_loop_sec:.1f}s (avg {_loop_sec / _pros:.2f}s/pro x{len(pro_skeleton_data)})",
+        flush=True,
+    )
 
     sorted_matches = sorted(matches, key=_match_sort_key, reverse=True)[:3]
     players: list[dict[str, Any]] = []
@@ -893,6 +926,9 @@ def handle_http_exception(error: HTTPException):
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(error: Exception):
+    import traceback
+
+    traceback.print_exc()  # 디버그: 실제 원인 traceback을 터미널에 출력
     return _error_response(
         message="분석 처리 중 서버 오류가 발생했습니다.",
         code="internal_server_error",
