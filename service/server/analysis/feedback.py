@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from analysis.coaching_feedback import build_coaching_feedback
+
 
 RELEASE_POINT_GOOD_THRESHOLD = 0.22
 RELEASE_TIMING_GOOD_THRESHOLD = 7.0
@@ -28,6 +30,16 @@ def build_analysis_feedback(
         pro_phases=pro_phases,
     )
     feedback = _build_phase_feedback(phase_scores)
+    detailed_feedback = build_coaching_feedback(
+        user_pose=user_pose,
+        pro_pose=pro_pose,
+        user_phases=user_phases,
+        pro_phases=pro_phases,
+        phase_scores=phase_scores,
+        release=release,
+    )
+    feedback["good"].extend(detailed_feedback["good"])
+    feedback["bad"].extend(detailed_feedback["bad"])
     return {"release": release, "feedback": feedback}
 
 

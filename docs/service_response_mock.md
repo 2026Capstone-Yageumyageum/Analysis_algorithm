@@ -187,6 +187,18 @@
               "differencePercent": 0,
               "difference": 0.39
             }
+          },
+          {
+            "phase": "acceleration",
+            "message": "가속 구간에서 투구 팔꿈치가 선수보다 낮게 형성됩니다. 팔이 처지는 패턴이 있는지 확인하세요.",
+            "evidence": {
+              "proFrame": 168,
+              "userFrame": 118,
+              "proPhasePercent": 65,
+              "userPhasePercent": 65,
+              "differencePercent": 0,
+              "difference": 0.14
+            }
           }
         ]
       }
@@ -299,7 +311,7 @@
 }
 ```
 
-`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`, `release`, `feedback`을 포함합니다. 각 `players[].phaseScores`는 fixed-step 리샘플링 기반 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. `players[].release`는 릴리즈 순간 전용 분석이며, `pro`/`user` 안의 `method`, `status`, `source`로 공 기반 탐지인지 proxy fallback인지 구분합니다. `players[].feedback`은 릴리즈를 제외한 phase 기반 잘한 점/문제점 요약입니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
+`players`는 `overallScore` 기준 상위 3개만 반환합니다. 각 항목은 `analysisId`, `proId`, `overallScore`, `phaseScores`, `release`, `feedback`을 포함합니다. 각 `players[].phaseScores`는 fixed-step 리샘플링 기반 phase별 유사도 점수와 사용자/프로 시작-끝 프레임을 포함합니다. `players[].release`는 릴리즈 순간 전용 분석이며, `pro`/`user` 안의 `method`, `status`, `source`로 공 기반 탐지인지 proxy fallback인지 구분합니다. `players[].feedback.good/bad`는 기존 JSON 구조를 유지하면서 phase 기반 요약과 현재 계산 가능한 관절/구간/릴리즈 지표 기반 상세 코칭 문장을 함께 담습니다. 프로 skeleton CSV 원문은 Python 서버가 시작/갱신 시 캐싱한 reference 데이터에 있으므로 응답에는 중복 포함하지 않습니다.
 
 ## `user_data.skeleton_data` 5프레임 축약 예시
 

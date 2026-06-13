@@ -116,6 +116,8 @@ OpenAPI YAML 원문을 반환합니다.
 - `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
+- `players[].release`
+- `players[].feedback.good/bad`
 
 오류가 발생하면 백엔드가 처리하기 쉽도록 다음 JSON 형태로 반환합니다.
 
