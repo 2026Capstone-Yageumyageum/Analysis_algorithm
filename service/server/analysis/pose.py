@@ -11,17 +11,33 @@ import cv2
 import numpy as np
 
 
-def _pose_model_complexity() -> int:
-    """MediaPipe Pose 정확도/속도 트레이드오프. 0=lite(가장 빠름), 1=full(기본), 2=heavy(느림).
+# 추론에 넣기 전 ROI 프레임의 최대 변 길이(px). 포즈 모델 입력은 내부적으로 ~256px라
+# 640이면 정확도 손실 없이 4K 입력의 cvtColor/리사이즈/마샬링 비용을 크게 줄인다.
+POSE_INFERENCE_MAX_DIM = 640
 
-    CPU에서 추론이 병목이면 POSE_MODEL_COMPLEXITY=0 으로 2~3배 빠르게 만들 수 있다.
+
+def _resize_for_inference(frame: "np.ndarray", max_dim: int = POSE_INFERENCE_MAX_DIM) -> "np.ndarray":
+    height, width = frame.shape[:2]
+    longest = max(height, width)
+    if longest <= max_dim:
+        return frame
+    scale = max_dim / float(longest)
+    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(frame, new_size, interpolation=cv2.INTER_AREA)
+
+
+def _pose_model_complexity() -> int:
+    """MediaPipe Pose 정확도/속도 트레이드오프. 0=lite(가장 빠름·기본), 1=full, 2=heavy(느림).
+
+    CPU에서 추론(프레임당 수 초)이 병목이라 기본값을 0(lite)으로 둔다.
+    더 정확한 포즈가 필요하면 POSE_MODEL_COMPLEXITY=1(또는 2)로 올릴 수 있다.
     """
-    raw = os.getenv("POSE_MODEL_COMPLEXITY", "1").strip()
+    raw = os.getenv("POSE_MODEL_COMPLEXITY", "0").strip()
     try:
         value = int(raw)
     except ValueError:
-        return 1
-    return value if value in (0, 1, 2) else 1
+        return 0
+    return value if value in (0, 1, 2) else 0
 
 from analysis.pose_coordinates import normalize_frame_point
 
@@ -195,7 +211,10 @@ def _extract_with_mediapipe(
             frame_height, frame_width = frame.shape[:2]
             roi_frame, roi = _crop_frame(frame, motion_roi)
             roi_x, roi_y, roi_width, roi_height = roi
-            rgb = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2RGB)
+            # 추론용으로만 ROI 프레임을 축소한다. MediaPipe 랜드마크는 입력 이미지 기준 0~1 비율이라
+            # 좌표 결과는 변하지 않고(원본 roi_width/height로 역산), 4K에서 cvtColor·내부 리사이즈 비용만 大폭 절감.
+            proc_frame = _resize_for_inference(roi_frame)
+            rgb = cv2.cvtColor(proc_frame, cv2.COLOR_BGR2RGB)
             result = pose.process(rgb)
             row: dict[str, Any] = {
                 "frame_index": frame_index,

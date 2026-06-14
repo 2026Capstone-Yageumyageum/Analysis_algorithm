@@ -148,8 +148,9 @@ def _estimate_release_event(
     if video_path is None:
         return None
     # 공 픽셀 기반 릴리즈 "정밀화"는 고해상도 프레임을 랜덤 시킹하며 처리해 매우 비싸다(수십~백수십초).
-    # BALL_RELEASE_DETECTION=0 이면 건너뛰고 phase 기반 릴리즈로 폴백한다(타이밍 정밀도만 소폭 하락).
-    if os.getenv("BALL_RELEASE_DETECTION", "1").strip() == "0":
+    # 기본적으로 끄고 phase 기반 릴리즈로 폴백한다(타이밍 정밀도만 소폭 하락, 속도 大폭 개선).
+    # 정밀 릴리즈가 필요하면 BALL_RELEASE_DETECTION=1 로 켤 수 있다.
+    if os.getenv("BALL_RELEASE_DETECTION", "0").strip() != "1":
         return None
     try:
         return estimate_ball_release_event(

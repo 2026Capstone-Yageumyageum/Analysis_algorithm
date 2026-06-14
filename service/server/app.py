@@ -400,11 +400,15 @@ def analyze_similarity():
 
         user_meta = inspect_video(user_path)
         max_frames = _parse_optional_int(metadata.get("maxFrames"))
+        # 앱 트리머로 선택한 구간(초)이 있으면 그 구간만 분석한다(없으면 전체).
+        user_trim = _preview_trim_seconds(metadata, "user")
         _t_extract = time.perf_counter()
         user_csv_text, user_pose_meta = extract_skeleton_data_csv_text(
             user_path,
             max_frames=max_frames,
-            sample_evenly=True,  # max_frames 지정 시 영상 전체에서 균등 샘플링 (뒷부분 투구 잘림 방지)
+            sample_evenly=True,  # max_frames 지정 시 (트림된) 구간 전체에서 균등 샘플링
+            start_sec=user_trim["startSec"],
+            end_sec=user_trim["endSec"],
             focus_motion=True,
         )
         _extract_sec = time.perf_counter() - _t_extract
@@ -789,7 +793,9 @@ def _rank_player_matches(
         flush=True,
     )
 
-    sorted_matches = sorted(matches, key=_match_sort_key, reverse=True)[:3]
+    # 전 프로를 점수순으로 반환한다(결과 페이지의 전 선수 비교 + 마이페이지 프로별 추이용).
+    # 결과 화면의 상위 N 노출은 프론트에서 처리한다.
+    sorted_matches = sorted(matches, key=_match_sort_key, reverse=True)
     players: list[dict[str, Any]] = []
     for index, match in enumerate(sorted_matches, start=1):
         player = {
