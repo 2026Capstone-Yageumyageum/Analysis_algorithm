@@ -73,7 +73,7 @@ OpenAPI YAML 원문을 반환합니다.
 
 서버 환경변수 기준으로 프로 skeleton reference를 다시 로드합니다.
 
-### `POST /api/analyze/similarity`
+### `POST /api/analyze`
 
 `multipart/form-data` 요청입니다.
 
@@ -116,6 +116,8 @@ OpenAPI YAML 원문을 반환합니다.
 - `players[].proId`
 - `players[].overallScore`
 - `players[].phaseScores`
+- `players[].release`
+- `players[].feedback.good/bad`
 
 오류가 발생하면 백엔드가 처리하기 쉽도록 다음 JSON 형태로 반환합니다.
 

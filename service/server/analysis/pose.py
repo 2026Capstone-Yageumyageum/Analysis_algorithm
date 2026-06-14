@@ -2,11 +2,44 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 from io import StringIO
 from pathlib import Path
 from typing import Any
 
 import cv2
+import numpy as np
+
+
+# 추론에 넣기 전 ROI 프레임의 최대 변 길이(px). 포즈 모델 입력은 내부적으로 ~256px라
+# 640이면 정확도 손실 없이 4K 입력의 cvtColor/리사이즈/마샬링 비용을 크게 줄인다.
+POSE_INFERENCE_MAX_DIM = 640
+
+
+def _resize_for_inference(frame: "np.ndarray", max_dim: int = POSE_INFERENCE_MAX_DIM) -> "np.ndarray":
+    height, width = frame.shape[:2]
+    longest = max(height, width)
+    if longest <= max_dim:
+        return frame
+    scale = max_dim / float(longest)
+    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(frame, new_size, interpolation=cv2.INTER_AREA)
+
+
+def _pose_model_complexity() -> int:
+    """MediaPipe Pose 정확도/속도 트레이드오프. 0=lite(가장 빠름·기본), 1=full, 2=heavy(느림).
+
+    CPU에서 추론(프레임당 수 초)이 병목이라 기본값을 0(lite)으로 둔다.
+    더 정확한 포즈가 필요하면 POSE_MODEL_COMPLEXITY=1(또는 2)로 올릴 수 있다.
+    """
+    raw = os.getenv("POSE_MODEL_COMPLEXITY", "0").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value in (0, 1, 2) else 0
+
+from analysis.pose_coordinates import normalize_frame_point
 
 
 JOINTS = (
@@ -69,6 +102,9 @@ def extract_skeleton_data_csv_text(
     max_frames: int | None = None,
     *,
     sample_evenly: bool = False,
+    start_sec: float | None = None,
+    end_sec: float | None = None,
+    focus_motion: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """Extract MediaPipe pose landmarks and serialize the project CSV schema.
 
@@ -76,13 +112,23 @@ def extract_skeleton_data_csv_text(
     with confidence 0.0 so the API contract is still runnable during integration.
     """
     try:
-        return _extract_with_mediapipe(video_path, max_frames=max_frames, sample_evenly=sample_evenly)
+        return _extract_with_mediapipe(
+            video_path,
+            max_frames=max_frames,
+            sample_evenly=sample_evenly,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            focus_motion=focus_motion,
+        )
     except ModuleNotFoundError:
         return _extract_placeholder(
             video_path,
             reason="mediapipe_not_installed",
             max_frames=max_frames,
             sample_evenly=sample_evenly,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            focus_motion=focus_motion,
         )
 
 
@@ -91,6 +137,9 @@ def _extract_with_mediapipe(
     max_frames: int | None = None,
     *,
     sample_evenly: bool = False,
+    start_sec: float | None = None,
+    end_sec: float | None = None,
+    focus_motion: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     import mediapipe as mp  # type: ignore[import-not-found]
 
@@ -119,29 +168,53 @@ def _extract_with_mediapipe(
 
     fps = _safe_positive_float(capture.get(cv2.CAP_PROP_FPS), fallback=30.0)
     source_frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    start_frame, end_frame, trim_meta = _frame_range_from_seconds(
+        source_frame_count=source_frame_count,
+        fps=fps,
+        start_sec=start_sec,
+        end_sec=end_sec,
+    )
     target_frame_indices = _target_frame_indices(
         source_frame_count=source_frame_count,
         max_frames=max_frames,
         sample_evenly=sample_evenly,
+        start_frame=start_frame,
+        end_frame=end_frame,
     )
+    motion_roi = _estimate_motion_roi(video_path, target_frame_indices) if focus_motion else None
     rows: list[dict[str, Any]] = []
     previous_values = _default_joint_values()
 
+    target_set = set(target_frame_indices)
+    max_target = target_frame_indices[-1] if target_frame_indices else -1
     with pose_module.Pose(
         static_image_mode=False,
-        model_complexity=1,
+        model_complexity=_pose_model_complexity(),
         enable_segmentation=False,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     ) as pose:
-        for frame_index in target_frame_indices:
-            if sample_evenly:
-                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        # 시킹(capture.set) 없이 순차로 읽으며 타깃 프레임만 추론한다.
+        # 임의 프레임 시킹은 키프레임부터 재디코딩해 매우 느리므로 순차 읽기로 대체.
+        current_index = -1
+        while True:
             ok, frame = capture.read()
             if not ok:
+                break
+            current_index += 1
+            if current_index > max_target:
+                break
+            if current_index not in target_set:
                 continue
+            frame_index = current_index
 
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_height, frame_width = frame.shape[:2]
+            roi_frame, roi = _crop_frame(frame, motion_roi)
+            roi_x, roi_y, roi_width, roi_height = roi
+            # 추론용으로만 ROI 프레임을 축소한다. MediaPipe 랜드마크는 입력 이미지 기준 0~1 비율이라
+            # 좌표 결과는 변하지 않고(원본 roi_width/height로 역산), 4K에서 cvtColor·내부 리사이즈 비용만 大폭 절감.
+            proc_frame = _resize_for_inference(roi_frame)
+            rgb = cv2.cvtColor(proc_frame, cv2.COLOR_BGR2RGB)
             result = pose.process(rgb)
             row: dict[str, Any] = {
                 "frame_index": frame_index,
@@ -154,8 +227,14 @@ def _extract_with_mediapipe(
                 if detected:
                     landmark = result.pose_landmarks.landmark[landmark_map[joint]]
                     previous_x, previous_y = previous_values[joint]
-                    x = _safe_finite_float(landmark.x, fallback=previous_x)
-                    y = _safe_finite_float(landmark.y, fallback=previous_y)
+                    local_x = _safe_finite_float(landmark.x, fallback=previous_x)
+                    local_y = _safe_finite_float(landmark.y, fallback=previous_y)
+                    x, y = normalize_frame_point(
+                        roi_x + local_x * roi_width,
+                        roi_y + local_y * roi_height,
+                        frame_width,
+                        frame_height,
+                    )
                     confidence = _safe_confidence(landmark.visibility)
                     previous_values[joint] = (x, y)
                 else:
@@ -180,6 +259,10 @@ def _extract_with_mediapipe(
         "frameCount": len(rows),
         "sourceFrameCount": source_frame_count,
         "sampleEvenly": sample_evenly,
+        "trim": trim_meta,
+        "focusMotion": focus_motion,
+        "motionRoi": _roi_meta(motion_roi, source_frame_count=source_frame_count),
+        "coordinateNormalization": "pixel_point_divided_by_max_frame_dimension_v1",
         "warning": None,
     }
 
@@ -190,6 +273,9 @@ def _extract_placeholder(
     max_frames: int | None = None,
     *,
     sample_evenly: bool = False,
+    start_sec: float | None = None,
+    end_sec: float | None = None,
+    focus_motion: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -198,10 +284,18 @@ def _extract_placeholder(
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     capture.release()
 
+    start_frame, end_frame, trim_meta = _frame_range_from_seconds(
+        source_frame_count=frame_count,
+        fps=fps,
+        start_sec=start_sec,
+        end_sec=end_sec,
+    )
     target_frame_indices = _target_frame_indices(
         source_frame_count=frame_count,
         max_frames=max_frames,
         sample_evenly=sample_evenly,
+        start_frame=start_frame,
+        end_frame=end_frame,
     )
     rows: list[dict[str, Any]] = []
     for frame_index in target_frame_indices:
@@ -225,24 +319,206 @@ def _extract_placeholder(
         "frameCount": len(rows),
         "sourceFrameCount": frame_count,
         "sampleEvenly": sample_evenly,
+        "trim": trim_meta,
+        "focusMotion": focus_motion,
+        "motionRoi": {"enabled": False, "reason": "placeholder"},
         "warning": reason,
     }
 
 
-def _target_frame_indices(source_frame_count: int, max_frames: int | None, *, sample_evenly: bool) -> list[int]:
+def _frame_range_from_seconds(
+    *,
+    source_frame_count: int,
+    fps: float,
+    start_sec: float | None,
+    end_sec: float | None,
+) -> tuple[int, int, dict[str, Any]]:
+    start_frame = _seconds_to_start_frame(start_sec, fps)
+    end_frame = _seconds_to_end_frame(end_sec, fps, source_frame_count)
+    start_frame = max(0, min(start_frame, max(0, source_frame_count)))
+    end_frame = max(0, min(end_frame, max(0, source_frame_count)))
+    if end_frame <= start_frame:
+        raise ValueError("트림 구간이 비어 있습니다. 시작초와 끝초를 다시 확인해 주세요.")
+
+    used_frame_count = max(0, end_frame - start_frame)
+    return (
+        start_frame,
+        end_frame,
+        {
+            "enabled": start_frame > 0 or end_frame < source_frame_count,
+            "startSec": round(start_frame / fps, 6) if fps > 0 else 0.0,
+            "endSec": round(end_frame / fps, 6) if fps > 0 else 0.0,
+            "startFrame": start_frame,
+            "endFrame": max(start_frame, end_frame - 1),
+            "usedSourceFrameCount": used_frame_count,
+            "sourceFrameCount": source_frame_count,
+        },
+    )
+
+
+def _seconds_to_start_frame(value: float | None, fps: float) -> int:
+    if value is None:
+        return 0
+    return int(math.floor(max(0.0, value) * fps))
+
+
+def _seconds_to_end_frame(value: float | None, fps: float, fallback: int) -> int:
+    if value is None:
+        return fallback
+    return int(math.ceil(max(0.0, value) * fps))
+
+
+def _target_frame_indices(
+    source_frame_count: int,
+    max_frames: int | None,
+    *,
+    sample_evenly: bool,
+    start_frame: int = 0,
+    end_frame: int | None = None,
+) -> list[int]:
     if source_frame_count <= 0:
         return []
-    if max_frames is None or max_frames >= source_frame_count:
-        return list(range(source_frame_count))
+    frame_start = max(0, min(start_frame, source_frame_count))
+    frame_end = source_frame_count if end_frame is None else max(0, min(end_frame, source_frame_count))
+    available_count = max(0, frame_end - frame_start)
+    if available_count <= 0:
+        return []
+    if max_frames is None or max_frames >= available_count:
+        return list(range(frame_start, frame_end))
     usable_count = max(1, max_frames)
     if not sample_evenly:
-        return list(range(usable_count))
+        return list(range(frame_start, min(frame_end, frame_start + usable_count)))
     if usable_count == 1:
-        return [0]
+        return [frame_start]
     return [
-        int(round(index * (source_frame_count - 1) / (usable_count - 1)))
+        int(round(frame_start + index * (available_count - 1) / (usable_count - 1)))
         for index in range(usable_count)
     ]
+
+
+def _estimate_motion_roi(video_path: Path, frame_indices: list[int]) -> tuple[int, int, int, int] | None:
+    if len(frame_indices) < 3:
+        return None
+
+    capture = cv2.VideoCapture(str(video_path))
+    if not capture.isOpened():
+        return None
+
+    sample_count = min(80, len(frame_indices))
+    sample_positions = np.linspace(0, len(frame_indices) - 1, sample_count).round().astype(int)
+    sampled_indices = [frame_indices[index] for index in sample_positions]
+    previous_gray: np.ndarray | None = None
+    heatmap: np.ndarray | None = None
+    source_width = 0
+    source_height = 0
+
+    for frame_index in sampled_indices:
+        capture.set(cv2.CAP_PROP_POS_FRAMES, int(frame_index))
+        ok, frame = capture.read()
+        if not ok:
+            continue
+        source_height, source_width = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (320, max(1, round(320 * source_height / max(1, source_width)))))
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        if previous_gray is None:
+            previous_gray = gray
+            continue
+        diff = cv2.absdiff(gray, previous_gray)
+        _, mask = cv2.threshold(diff, 18, 255, cv2.THRESH_BINARY)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), dtype=np.uint8))
+        heatmap = mask.astype(np.float32) if heatmap is None else heatmap + mask.astype(np.float32)
+        previous_gray = gray
+
+    capture.release()
+    if heatmap is None or source_width <= 0 or source_height <= 0:
+        return None
+
+    heatmap = cv2.GaussianBlur(heatmap, (9, 9), 0)
+    nonzero = heatmap[heatmap > 0]
+    if nonzero.size == 0:
+        return None
+    threshold = max(float(np.percentile(nonzero, 70)), float(nonzero.mean()))
+    motion_mask = (heatmap >= threshold).astype(np.uint8) * 255
+    motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_CLOSE, np.ones((7, 7), dtype=np.uint8))
+    motion_mask = cv2.dilate(motion_mask, np.ones((9, 9), dtype=np.uint8), iterations=1)
+
+    component_count, labels, stats, centroids = cv2.connectedComponentsWithStats(motion_mask, connectivity=8)
+    if component_count <= 1:
+        return None
+
+    mask_height, mask_width = motion_mask.shape[:2]
+    best: tuple[float, int] | None = None
+    for label in range(1, component_count):
+        x, y, width, height, area = stats[label]
+        if area < max(20, int(mask_width * mask_height * 0.002)):
+            continue
+        center_x, center_y = centroids[label]
+        if center_y < mask_height * 0.22:
+            continue
+        component_heat = float(heatmap[labels == label].sum())
+        lower_weight = 1.0 + 0.45 * (center_y / max(1, mask_height))
+        size_weight = 1.0 + min(1.0, height / max(1, mask_height))
+        score = component_heat * lower_weight * size_weight
+        if best is None or score > best[0]:
+            best = (score, label)
+
+    if best is None:
+        return None
+
+    x, y, width, height, _ = stats[best[1]]
+    scale_x = source_width / max(1, mask_width)
+    scale_y = source_height / max(1, mask_height)
+    raw_x = int(round(x * scale_x))
+    raw_y = int(round(y * scale_y))
+    raw_w = int(round(width * scale_x))
+    raw_h = int(round(height * scale_y))
+    return _expanded_roi(raw_x, raw_y, raw_w, raw_h, source_width, source_height)
+
+
+def _expanded_roi(x: int, y: int, width: int, height: int, frame_width: int, frame_height: int) -> tuple[int, int, int, int]:
+    center_x = x + width / 2
+    center_y = y + height / 2
+    expanded_width = max(width * 2.4, frame_width * 0.20)
+    expanded_height = max(height * 3.0, frame_height * 0.38)
+    top_bias = expanded_height * 0.18
+    left = int(round(center_x - expanded_width / 2))
+    top = int(round(center_y - expanded_height / 2 - top_bias))
+    right = int(round(center_x + expanded_width / 2))
+    bottom = int(round(center_y + expanded_height / 2))
+    left = max(0, left)
+    top = max(0, top)
+    right = min(frame_width, right)
+    bottom = min(frame_height, bottom)
+    if right - left < 32 or bottom - top < 32:
+        return (0, 0, frame_width, frame_height)
+    return (left, top, right, bottom)
+
+
+def _crop_frame(frame: np.ndarray, roi: tuple[int, int, int, int] | None) -> tuple[np.ndarray, tuple[int, int, int, int]]:
+    frame_height, frame_width = frame.shape[:2]
+    if roi is None:
+        return frame, (0, 0, frame_width, frame_height)
+    left, top, right, bottom = roi
+    left = max(0, min(left, frame_width - 1))
+    top = max(0, min(top, frame_height - 1))
+    right = max(left + 1, min(right, frame_width))
+    bottom = max(top + 1, min(bottom, frame_height))
+    return frame[top:bottom, left:right], (left, top, right - left, bottom - top)
+
+
+def _roi_meta(roi: tuple[int, int, int, int] | None, *, source_frame_count: int) -> dict[str, Any]:
+    if roi is None:
+        return {"enabled": False, "sourceFrameCount": source_frame_count}
+    left, top, right, bottom = roi
+    return {
+        "enabled": True,
+        "x": left,
+        "y": top,
+        "width": max(0, right - left),
+        "height": max(0, bottom - top),
+        "sourceFrameCount": source_frame_count,
+    }
 
 
 def _default_joint_values() -> dict[str, tuple[float, float]]:

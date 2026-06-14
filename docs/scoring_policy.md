@@ -97,9 +97,18 @@ good: phaseScore >= 78
 bad: phaseScore <= 68
 ```
 
-각각 최대 2개를 반환합니다. 기준을 만족하는 phase가 없으면, good에는 가장 점수가 높은 phase 1개, bad에는 가장 점수가 낮은 phase 1개를 fallback으로 넣습니다.
+phase 점수 기반 macro 메시지는 good/bad 각각 최대 2개를 먼저 반환합니다. 기준을 만족하는 phase가 없으면, good에는 가장 점수가 높은 phase 1개, bad에는 가장 점수가 낮은 phase 1개를 fallback으로 넣습니다.
 
-`feedback`은 phase 기반 macro 메시지입니다. 릴리즈는 phase가 아니라 순간 이벤트이므로 `feedback` 안에 넣지 않고 `release` 필드로 따로 반환합니다.
+`feedback.good/bad`는 기존 JSON 구조를 유지하면서 phase 기반 macro 메시지와 상세 rule 기반 코칭 문장을 함께 담습니다. 릴리즈 요약 값은 `release` 필드로 따로 반환하고, 릴리즈 타이밍/포인트 차이가 임계값을 넘는 경우에만 관련 문장을 `feedback.bad`에 추가합니다.
+
+상세 rule 기반 문장은 현재 계산 가능한 지표만 사용합니다. 사용 지표는 다음 범위로 제한합니다.
+
+- phase 점수 하위 구간
+- body-frame 좌표의 디딤 무릎 높이/방향, 디딤발 착지 폭, 투구 팔꿈치/손목 높이, 팔로스루 손목 이동
+- phase별 시간 비율 차이
+- release timing/point 차이
+
+이 문장은 실제 AI 추론이 아니라 rule 기반 설명입니다. 따라서 “경향”, “확인”처럼 보수적인 표현을 사용하고, 임계값을 넘은 항목만 `feedback.bad`에 최대 8개까지 추가합니다.
 
 ## 릴리즈 분석
 
@@ -140,11 +149,12 @@ difference <= 0.22: 비슷함
 - `service/server/analysis/phase.py`: 후면 영상 기준 keypoints 기반 phase detection
 - `service/server/analysis/resampling_preview.py`: fixed-step 리샘플링과 step별 skeleton 자세 점수
 - `service/server/analysis/similarity.py`: 메인 API용 phaseScore / overallScore / feedback 조립
-- `service/server/analysis/feedback.py`: release 분석과 phase 기반 good/bad 메시지 생성
+- `service/server/analysis/feedback.py`: release 분석과 phase 기반 good/bad 메시지 조립
+- `service/server/analysis/coaching_feedback.py`: 관절/시간/릴리즈 지표 기반 상세 good/bad 피드백 생성
 
 ## 아직 부족한 점
 
 - 메인 API는 pro 원본 영상을 받지 않으므로 공 기반 pro release를 항상 쓸 수 없습니다.
-- `feedback.good/bad`는 아직 관절별 상세 원인 문장이 아니라 phase 점수 기반 macro입니다.
+- `feedback.good/bad`의 상세 원인 후보는 2D body-frame heuristic이므로 의학적/전문 코칭 결론으로 확정하지 않습니다.
 - DTW는 현재 서비스 점수에 사용하지 않습니다.
 - 후면 영상 원근감은 완전히 제거되지 않습니다.

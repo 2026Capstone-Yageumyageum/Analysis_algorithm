@@ -6,11 +6,31 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from analysis.coaching_feedback import build_coaching_feedback
+
 
 RELEASE_POINT_GOOD_THRESHOLD = 0.22
-RELEASE_TIMING_GOOD_THRESHOLD = 7.0
+# 발 착지~피니시 구간(전체보다 짧음) 기준이라, 전체 정규화보다 % 차이가 크게 잡힌다.
+# 그에 맞춰 '비슷' 허용폭을 키운다. (실데이터로 재튜닝 가능)
+RELEASE_TIMING_GOOD_THRESHOLD = 10.0
 PHASE_GOOD_THRESHOLD = 78.0
 PHASE_BAD_THRESHOLD = 68.0
+
+# 구간별 '좋은 폼' 가이드라인 — 구체 지표가 잡히지 않은 구간에 무엇을 점검할지 알려준다.
+PHASE_GUIDELINES = {
+    "windup": "준비 동작에서는 중심을 안정적으로 모으고 일정한 리듬으로 시작하세요.",
+    "leg_lift": "디딤 무릎을 허리 높이까지 곧게 들어올리고, 축발에 체중을 실어 중심을 뒤에 두세요.",
+    "stride": "디딤발을 홈플레이트 방향으로 곧게 내딛고, 골반부터 상체 순으로 회전을 시작하세요.",
+    "acceleration": "팔꿈치를 어깨선 높이로 끌어올리고, 하체 회전력이 상체·팔로 순차 전달되게 하세요.",
+    "follow_through": "던진 뒤 팔이 반대쪽으로 자연스럽게 따라 내려오며 균형을 잡고 마무리하세요.",
+}
+
+
+def _phase_guideline(phase_code: Any) -> str:
+    return PHASE_GUIDELINES.get(
+        str(phase_code or ""),
+        "선수의 같은 구간 자세와 프레임 단위로 비교해 차이 나는 부위를 맞춰 보세요.",
+    )
 
 
 def build_analysis_feedback(
@@ -28,6 +48,16 @@ def build_analysis_feedback(
         pro_phases=pro_phases,
     )
     feedback = _build_phase_feedback(phase_scores)
+    detailed_feedback = build_coaching_feedback(
+        user_pose=user_pose,
+        pro_pose=pro_pose,
+        user_phases=user_phases,
+        pro_phases=pro_phases,
+        phase_scores=phase_scores,
+        release=release,
+    )
+    feedback["good"].extend(detailed_feedback["good"])
+    feedback["bad"].extend(detailed_feedback["bad"])
     return {"release": release, "feedback": feedback}
 
 
@@ -115,7 +145,10 @@ def _build_phase_feedback(phase_scores: list[dict[str, Any]]) -> dict[str, list[
         bad.append(
             {
                 "phase": phase.get("phase"),
-                "message": f"{phase.get('label', '해당')} 구간에서 선수와 움직임 차이가 크게 나타납니다.",
+                "message": (
+                    f"{phase.get('label', '해당')} 구간은 선수와 자세 차이가 큰 편입니다. "
+                    f"{_phase_guideline(phase.get('phase'))}"
+                ),
                 "evidence": _phase_feedback_evidence(phase),
             }
         )
@@ -125,7 +158,7 @@ def _build_phase_feedback(phase_scores: list[dict[str, Any]]) -> dict[str, list[
         good.append(
             {
                 "phase": phase.get("phase"),
-                "message": f"{phase.get('label', '해당')} 구간이 가장 안정적으로 유사합니다.",
+                "message": f"{phase.get('label', '해당')} 구간이 다른 구간 중 선수와 가장 비슷합니다.",
                 "evidence": _phase_feedback_evidence(phase),
             }
         )
@@ -134,7 +167,10 @@ def _build_phase_feedback(phase_scores: list[dict[str, Any]]) -> dict[str, list[
         bad.append(
             {
                 "phase": phase.get("phase"),
-                "message": f"{phase.get('label', '해당')} 구간은 비교적 더 점검이 필요합니다.",
+                "message": (
+                    f"{phase.get('label', '해당')} 구간이 다른 구간에 비해 선수와 차이가 큽니다. "
+                    f"{_phase_guideline(phase.get('phase'))}"
+                ),
                 "evidence": _phase_feedback_evidence(phase),
             }
         )
@@ -168,11 +204,43 @@ def _release_frame(phases: Any) -> float | None:
 
 
 def _pitch_percent(frame: float | None, phases: Any) -> int | None:
+    """릴리즈 시점을 '발 착지(스트라이드 착지) ~ 팔로스루 끝' 구간에서의 위치(%)로 잰다.
+
+    준비 동작(와인드업·레그리프트)은 사람마다 길이가 들쭉날쭉해, 전체 동작으로
+    정규화하면 릴리즈 타이밍 비교가 준비동작 차이에 휘둘린다. 발 착지 이후는
+    연속된 투구 동작이므로, 발 착지를 0%·팔로스루 끝을 100%로 두면 준비동작
+    길이와 무관하게 릴리즈 타이밍을 비교할 수 있다.
+    """
     if frame is None:
         return None
     intervals = getattr(phases, "intervals", {}) or {}
     if not intervals:
         return None
+    anchor = _stride_plant_frame(intervals)
+    end = _interval_frame(intervals, "follow_through", "endFrame")
+    if anchor is None or end is None:
+        return _legacy_pitch_percent(frame, intervals)  # 경계 누락 시 전체 구간 폴백
+    if end <= anchor or math.isclose(anchor, end):
+        return None
+    percent = (frame - anchor) / (end - anchor) * 100.0
+    return int(round(max(0.0, min(100.0, percent))))
+
+
+def _interval_frame(intervals: dict[str, Any], phase: str, key: str) -> float | None:
+    interval = intervals.get(phase) or {}
+    return _safe_float(interval.get(key), fallback=None)
+
+
+def _stride_plant_frame(intervals: dict[str, Any]) -> float | None:
+    """발 착지 프레임 = 가속 구간 시작(= 스트라이드 끝)."""
+    frame = _interval_frame(intervals, "acceleration", "startFrame")
+    if frame is None:
+        frame = _interval_frame(intervals, "stride", "endFrame")
+    return frame
+
+
+def _legacy_pitch_percent(frame: float, intervals: dict[str, Any]) -> int | None:
+    """phase 경계가 부족할 때만 쓰는 전체-구간 정규화 폴백."""
     starts = [_safe_float(interval.get("startFrame"), fallback=None) for interval in intervals.values()]
     ends = [_safe_float(interval.get("endFrame"), fallback=None) for interval in intervals.values()]
     valid_values = [value for value in starts + ends if value is not None]
@@ -182,8 +250,7 @@ def _pitch_percent(frame: float | None, phases: Any) -> int | None:
     end = max(valid_values)
     if math.isclose(start, end):
         return None
-    percent = (frame - start) / (end - start) * 100.0
-    return int(round(max(0.0, min(100.0, percent))))
+    return int(round(max(0.0, min(100.0, (frame - start) / (end - start) * 100.0))))
 
 
 def _difference_percent(pro_percent: int | None, user_percent: int | None) -> int | None:
@@ -235,10 +302,10 @@ def _release_timing_message(difference_percent: int | None) -> str:
     if difference_percent is None:
         return "릴리즈 타이밍을 계산하지 못했습니다."
     if abs(difference_percent) <= RELEASE_TIMING_GOOD_THRESHOLD:
-        return "릴리즈 타이밍이 선수와 비슷합니다."
+        return "발 착지 이후 릴리즈 타이밍이 선수와 비슷합니다."
     if difference_percent > 0:
-        return "릴리즈 타이밍이 선수보다 늦게 나타납니다."
-    return "릴리즈 타이밍이 선수보다 빠르게 나타납니다."
+        return "발 착지 이후 릴리즈가 선수보다 늦게 나타납니다."
+    return "발 착지 이후 릴리즈가 선수보다 빠르게 나타납니다."
 
 
 def _release_point_message(metrics: dict[str, float | None]) -> str:
