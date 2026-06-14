@@ -51,7 +51,7 @@ def test_build_coaching_feedback_adds_metric_specific_tips() -> None:
         {"phase": "stride", "label": "스트라이드", "score": 72},
     ]
     release = {
-        "timing": {"differencePercent": 16},
+        "timing": {"differencePercent": 22},
         "point": {"difference": 0.31, "message": "릴리즈 포인트가 선수보다 낮게 형성됩니다."},
     }
 
@@ -66,10 +66,15 @@ def test_build_coaching_feedback_adds_metric_specific_tips() -> None:
 
     bad_messages = [item["message"] for item in feedback["bad"]]
     assert set(feedback) == {"good", "bad"}
-    assert not feedback["good"]
-    assert any("릴리즈 타이밍" in message for message in bad_messages)
+    # good은 선수와 '일치한 지표'에만 생성되므로, 차이가 큰 이 지표들은 good에 없어야 한다.
+    good_messages = [item["message"] for item in feedback["good"]]
+    assert not any("디딤 무릎 높이" in m for m in good_messages)
+    assert not any("투구 팔꿈치" in m for m in good_messages)
+    assert any("발 착지 이후 릴리즈" in message for message in bad_messages)
     assert any("디딤 무릎 높이" in message for message in bad_messages)
     assert any("투구 팔꿈치" in message for message in bad_messages)
+    # 정밀화: 측정 근거(나 vs 선수 값)가 메시지에 포함된다.
+    assert any("측정값" in message and "선수" in message for message in bad_messages)
     assert len(feedback["bad"]) <= 8
     assert set(feedback["bad"][0]["evidence"]) == {
         "proFrame",
@@ -81,5 +86,31 @@ def test_build_coaching_feedback_adds_metric_specific_tips() -> None:
     }
 
 
+def test_build_coaching_feedback_emits_good_for_matched() -> None:
+    # 사용자와 선수 자세가 거의 일치하고 구간 점수가 높으면 '잘된 점'이 생성된다.
+    pose = _pose_table(knee_y=0.85, foot_x=0.25, elbow_y=0.45, wrist_y=0.45)
+    phase_scores = [{"phase": "acceleration", "label": "가속", "score": 88}]
+    release = {
+        "timing": {"differencePercent": 2},
+        "point": {"difference": 0.05, "message": "릴리즈 포인트가 안정적입니다."},
+    }
+
+    feedback = build_coaching_feedback(
+        user_pose=pose,
+        pro_pose=pose,
+        user_phases=_phases(),
+        pro_phases=_phases(),
+        phase_scores=phase_scores,
+        release=release,
+    )
+
+    good_messages = [item["message"] for item in feedback["good"]]
+    assert feedback["good"]
+    assert len(feedback["good"]) <= 4
+    assert any(("매우 유사" in m) or ("거의 일치" in m) for m in good_messages)
+
+
 if __name__ == "__main__":
     test_build_coaching_feedback_adds_metric_specific_tips()
+    test_build_coaching_feedback_emits_good_for_matched()
+    print("ok")

@@ -488,7 +488,29 @@ def _build_phase_preview(
     }
 
 
+def _mirror_joint(joint: str) -> str:
+    """좌/우 관절 라벨을 맞바꾼다(미드라인 관절은 그대로)."""
+    if joint.startswith("left_"):
+        return "right_" + joint[len("left_") :]
+    if joint.startswith("right_"):
+        return "left_" + joint[len("right_") :]
+    return joint
+
+
+def _canonicalize_points(points: dict[str, Any], throwing_left: bool) -> dict[str, Any]:
+    """좌투수는 좌/우 라벨을 교환해 '투구팔이 항상 같은 라벨'에 오도록 정렬한다.
+
+    정규화에서 좌투수는 body_x가 이미 미러링돼 좌표 위치는 우투수와 정렬되지만,
+    좌/우 라벨은 그대로라 점수 비교(라벨 고정)에서 투구팔 vs 글러브팔이 비교됐다.
+    여기서 라벨을 표준화해 좌/우투 모두 공정하게 같은 부위끼리 비교되게 한다.
+    """
+    if not throwing_left:
+        return points
+    return {_mirror_joint(joint): value for joint, value in points.items()}
+
+
 def _resample_table(table: pd.DataFrame, interval: dict[str, Any], step_count: int) -> list[dict[str, Any]]:
+    throwing_left = "throwing_side" in table.columns and str(table["throwing_side"].iloc[0]) == "left"
     start_frame = float(interval["startFrame"])
     end_frame = float(interval["endFrame"])
     frame_floor = math.floor(min(start_frame, end_frame))
@@ -520,7 +542,14 @@ def _resample_table(table: pd.DataFrame, interval: dict[str, Any], step_count: i
                 "y": _round_or_none(_interpolate(frame_values, y_values, target_frame)),
                 "confidence": _round_or_none(_interpolate(frame_values, confidence_values, target_frame, fallback=0.0)),
             }
-        samples.append({"targetFrame": round(float(target_frame), 4), "points": points, "displayPoints": display_points})
+        samples.append(
+            {
+                "targetFrame": round(float(target_frame), 4),
+                # 점수 비교용 좌표는 좌/우투 라벨을 표준화(displayPoints는 원본 유지)
+                "points": _canonicalize_points(points, throwing_left),
+                "displayPoints": display_points,
+            }
+        )
     return samples
 
 

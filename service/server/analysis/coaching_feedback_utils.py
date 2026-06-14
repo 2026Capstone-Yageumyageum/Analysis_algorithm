@@ -37,6 +37,8 @@ class AxisRule:
     metric_label: str
     positive_message: str
     negative_message: str
+    # 이 지표가 왜 중요한지(기계적 이유) — 정밀 피드백 문구에 함께 노출한다.
+    why: str = ""
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,15 @@ def phase_frame(phases: Any, phase: str, percent: float) -> float | None:
     if start is None or end is None:
         return None
     return start + ((end - start) * max(0.0, min(100.0, percent)) / 100.0)
+
+
+def magnitude_word(ratio: float) -> str:
+    """차이/임계값 비율(>=1)을 정성적 강도 표현으로 바꾼다."""
+    if ratio >= 1.8:
+        return "크게"
+    if ratio >= 1.3:
+        return "뚜렷이"
+    return "약간"
 
 
 def metric_value(point: PosePoint, axis: str) -> float:
