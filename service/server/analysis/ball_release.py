@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from analysis.video import open_capture
+
 
 MIN_CONFIDENCE = 0.05
 ARM_SPEED_GATE_MAX_RATIO = 0.78
@@ -67,7 +69,7 @@ def estimate_ball_release_event(
         elbow=elbow,
     )
 
-    capture = cv2.VideoCapture(str(video_path))
+    capture = open_capture(video_path)
     if not capture.isOpened():
         return None
     try:
