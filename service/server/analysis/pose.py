@@ -10,6 +10,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from analysis.video import open_capture
+
 
 # 추론에 넣기 전 ROI 프레임의 최대 변 길이(px). 포즈 모델 입력은 내부적으로 ~256px라
 # 640이면 정확도 손실 없이 4K 입력의 cvtColor/리사이즈/마샬링 비용을 크게 줄인다.
@@ -162,7 +164,7 @@ def _extract_with_mediapipe(
         "right_foot_index": pose_module.PoseLandmark.RIGHT_FOOT_INDEX,
     }
 
-    capture = cv2.VideoCapture(str(video_path))
+    capture = open_capture(video_path)
     if not capture.isOpened():
         raise ValueError(f"영상 파일을 열 수 없습니다: {video_path.name}")
 
@@ -277,7 +279,7 @@ def _extract_placeholder(
     end_sec: float | None = None,
     focus_motion: bool = False,
 ) -> tuple[str, dict[str, Any]]:
-    capture = cv2.VideoCapture(str(video_path))
+    capture = open_capture(video_path)
     if not capture.isOpened():
         raise ValueError(f"영상 파일을 열 수 없습니다: {video_path.name}")
     fps = _safe_positive_float(capture.get(cv2.CAP_PROP_FPS), fallback=30.0)
@@ -400,7 +402,7 @@ def _estimate_motion_roi(video_path: Path, frame_indices: list[int]) -> tuple[in
     if len(frame_indices) < 3:
         return None
 
-    capture = cv2.VideoCapture(str(video_path))
+    capture = open_capture(video_path)
     if not capture.isOpened():
         return None
 
