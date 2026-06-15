@@ -381,11 +381,18 @@ def uploaded_resampling_preview():
 @app.post("/api/analyze")
 def analyze_similarity():
     user_upload = _required_file("userVideo")
-    pro_skeleton_data = get_cached_pro_skeletons()
-    if not pro_skeleton_data:
-        raise ServiceUnavailable("프로 skeleton 캐시가 비어 있습니다. 서버 시작 시 백엔드에서 프로 데이터를 받아오도록 설정해 주세요.")
     metadata = _parse_metadata()
     _validate_similarity_metadata(metadata)
+    # 비교 대상 결정:
+    #  - metadata.referenceSkeletons 가 있으면 그 골격들과 비교한다(예: 내 "최고의 1구").
+    #  - 없으면 기존대로 서버 프로 캐시와 비교한다(하위호환).
+    reference_skeletons = _parse_reference_skeletons(metadata)
+    if reference_skeletons is not None:
+        pro_skeleton_data = reference_skeletons
+    else:
+        pro_skeleton_data = get_cached_pro_skeletons()
+        if not pro_skeleton_data:
+            raise ServiceUnavailable("프로 skeleton 캐시가 비어 있습니다. 서버 시작 시 백엔드에서 프로 데이터를 받아오도록 설정해 주세요.")
     user_metadata = _metadata_object(metadata, "user")
     video_id = str(metadata.get("videoId") or user_metadata.get("videoId") or f"user_video_{uuid4().hex[:10]}")
     skeleton_data_id = str(
@@ -413,7 +420,14 @@ def analyze_similarity():
         )
         _extract_sec = time.perf_counter() - _t_extract
         _t_rank = time.perf_counter()
-        players = _rank_player_matches(user_csv_text, pro_skeleton_data, user_video_path=user_path)
+        # 최고의 1구 비교(referenceSkeletons 주입)면 피드백 문구/방향성 해석을 best_pitch 모드로.
+        comparison_mode = "best_pitch" if reference_skeletons is not None else "pro"
+        players = _rank_player_matches(
+            user_csv_text,
+            pro_skeleton_data,
+            user_video_path=user_path,
+            comparison_mode=comparison_mode,
+        )
         _rank_sec = time.perf_counter() - _t_rank
         print(
             f"[TIMING] pose_extract={_extract_sec:.1f}s "
@@ -714,6 +728,31 @@ def _parse_metadata() -> dict:
     return payload
 
 
+def _parse_reference_skeletons(metadata: dict) -> list[dict[str, Any]] | None:
+    """metadata.referenceSkeletons → [{proId, skeleton_data}] 정규화.
+
+    필드가 아예 없으면 None(=프로 캐시 비교)을 반환하고,
+    값이 있으나 유효한 항목이 없으면 ValueError를 던진다.
+    """
+    raw = metadata.get("referenceSkeletons")
+    if raw in (None, ""):
+        return None
+    if not isinstance(raw, list):
+        raise ValueError("referenceSkeletons는 JSON 배열이어야 합니다.")
+    items: list[dict[str, Any]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        pro_id = entry.get("proId") or entry.get("pro_id") or entry.get("id")
+        csv_text = entry.get("skeleton_data") or entry.get("skeletonData")
+        if pro_id is None or not isinstance(csv_text, str) or not csv_text.strip():
+            continue
+        items.append({"proId": str(pro_id), "skeleton_data": csv_text})
+    if not items:
+        raise ValueError("referenceSkeletons에 유효한 골격 데이터가 없습니다.")
+    return items
+
+
 def _validate_similarity_metadata(metadata: dict) -> None:
     camera_view = metadata.get("cameraView")
     if camera_view not in (None, "", SUPPORTED_CAMERA_VIEW):
@@ -759,6 +798,7 @@ def _rank_player_matches(
     pro_skeleton_data: list[dict[str, Any]],
     *,
     user_video_path: Path | None = None,
+    comparison_mode: str = "pro",
 ) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     # 사용자 릴리즈 이벤트는 프로와 무관하게 동일하므로 한 번만 계산해 재사용한다.
@@ -773,6 +813,7 @@ def _rank_player_matches(
             user_csv_text,
             item["skeleton_data"],
             release_events=user_release_events,
+            comparison_mode=comparison_mode,
         )
         matches.append(
             {

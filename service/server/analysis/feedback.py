@@ -40,7 +40,10 @@ def build_analysis_feedback(
     user_phases: Any,
     pro_phases: Any,
     phase_scores: list[dict[str, Any]],
+    comparison_mode: str = "pro",
 ) -> dict[str, Any]:
+    # 최고의 1구 비교에서는 비교 대상을 "선수" 대신 "최고의 1구"로 표기한다.
+    reference_label = "최고의 1구" if comparison_mode == "best_pitch" else "선수"
     release = _build_release_feedback(
         user_pose=user_pose,
         pro_pose=pro_pose,
@@ -55,10 +58,30 @@ def build_analysis_feedback(
         pro_phases=pro_phases,
         phase_scores=phase_scores,
         release=release,
+        comparison_mode=comparison_mode,
+        reference_label=reference_label,
     )
     feedback["good"].extend(detailed_feedback["good"])
     feedback["bad"].extend(detailed_feedback["bad"])
-    return {"release": release, "feedback": feedback}
+    result = {"release": release, "feedback": feedback}
+    # 레거시 문구에 하드코딩된 "선수"를 비교 대상 라벨로 일괄 치환(방향성 코멘트는 이미 라벨 사용).
+    if reference_label != "선수":
+        _relabel_messages(result, reference_label)
+    return result
+
+
+def _relabel_messages(result: dict[str, Any], reference_label: str) -> None:
+    """release/timing/point/feedback 메시지의 '선수'를 비교 대상 라벨로 바꾼다."""
+    release = result.get("release") or {}
+    for section in ("timing", "point"):
+        block = release.get(section)
+        if isinstance(block, dict) and isinstance(block.get("message"), str):
+            block["message"] = block["message"].replace("선수", reference_label)
+    feedback = result.get("feedback") or {}
+    for bucket in ("good", "bad"):
+        for item in feedback.get(bucket, []) or []:
+            if isinstance(item, dict) and isinstance(item.get("message"), str):
+                item["message"] = item["message"].replace("선수", reference_label)
 
 
 def _build_release_feedback(

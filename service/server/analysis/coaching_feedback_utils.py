@@ -39,6 +39,10 @@ class AxisRule:
     negative_message: str
     # 이 지표가 왜 중요한지(기계적 이유) — 정밀 피드백 문구에 함께 노출한다.
     why: str = ""
+    # "힘 전달" 관점에서 더 유리한 방향. "positive"면 기준보다 클수록(diff>0),
+    # "negative"면 작을수록 유리. 최고의 1구 비교에서 "다르지만 더 나을 수 있다" 코멘트에 쓰인다.
+    # None이면 방향성 해석을 하지 않는다(차이는 단순 '다름'으로만 본다).
+    favorable_direction: str | None = None
 
 
 @dataclass(frozen=True)

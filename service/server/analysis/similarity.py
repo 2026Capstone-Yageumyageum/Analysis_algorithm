@@ -59,6 +59,7 @@ def compute_similarity(
     user_video_path: Path | None = None,
     pro_video_path: Path | None = None,
     release_events: dict[str, dict[str, Any]] | None = None,
+    comparison_mode: str = "pro",
 ) -> dict[str, Any]:
     user_df = pd.read_csv(StringIO(user_csv_text))
     pro_df = pd.read_csv(StringIO(pro_csv_text))
@@ -101,6 +102,7 @@ def compute_similarity(
         user_phases=user_phases,
         pro_phases=pro_phases,
         phase_scores=phase_scores,
+        comparison_mode=comparison_mode,
     )
 
     return {
