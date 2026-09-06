@@ -12,6 +12,7 @@ from analysis.ball_release import estimate_ball_release_event
 from analysis.feedback import build_analysis_feedback
 from analysis.normalization import build_body_frame_pose
 from analysis.phase import detect_pitch_phases
+from analysis.phase_metrics import build_phase_metrics
 from analysis.resampling_preview import build_resampled_phase_previews
 
 
@@ -104,6 +105,14 @@ def compute_similarity(
         phase_scores=phase_scores,
         comparison_mode=comparison_mode,
     )
+    # 문장(feedback)과 별개로, 구조화된 구간 지표를 함께 내보낸다.
+    phase_metrics = build_phase_metrics(
+        user_pose.table,
+        pro_pose.table,
+        user_phases,
+        pro_phases,
+        comparison_mode=comparison_mode,
+    )
 
     return {
         "status": "ready" if overall is not None else "no_score",
@@ -113,6 +122,7 @@ def compute_similarity(
         "phaseScores": phase_scores,
         "release": analysis_feedback["release"],
         "feedback": analysis_feedback["feedback"],
+        "phaseMetrics": phase_metrics,
         "phaseDetection": {
             "user": {
                 "representativeFrames": user_phases.representative_frames,
