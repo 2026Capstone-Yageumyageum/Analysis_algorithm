@@ -99,7 +99,10 @@ user_point 또는 pro_point 를 얻지 못함        → unavailable  (값은 �
   - `AXIS_RULES`를 순회하며 **임계 초과 여부와 무관하게** 항상 항목을 만든다.
   - 좌표 조회는 기존 `point_at_phase` / `metric_value`를 재사용한다.
 - `similarity.compute_similarity` 반환값에 `phaseMetrics`를 더한다.
-- `coaching_feedback.py`는 수정하지 않는다(문장 생성 로직 보존). `AXIS_RULES`만 읽어 쓴다.
+- `coaching_feedback.py`의 **문장 생성 로직은 바꾸지 않는다.** `AXIS_RULES`만 읽어 쓴다.
+  다만 "유리한 방향" 판정(`_is_favorable`)은 `AxisRule`의 성질이므로
+  `coaching_feedback_utils.py`로 옮겨 `is_favorable`로 공유한다. 문장 생성과 지표 산출이
+  각자 판정을 들고 있으면 언젠가 서로 다른 답을 낸다. 옮기는 것뿐이고 로직은 그대로다.
 
 ### 2. backend (Spring)
 
