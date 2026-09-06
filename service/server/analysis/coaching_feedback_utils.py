@@ -45,6 +45,19 @@ class AxisRule:
     favorable_direction: str | None = None
 
 
+def is_favorable(rule: AxisRule, diff: float) -> bool:
+    """이 차이가 '힘 전달' 관점에서 더 유리한 방향인지.
+
+    AxisRule의 성질이므로 규칙 옆에 둔다. 문장 생성과 지표 산출이 각자
+    판정을 들고 있으면 언젠가 서로 다른 답을 내게 된다.
+    """
+    if rule.favorable_direction == "positive":
+        return diff > 0
+    if rule.favorable_direction == "negative":
+        return diff < 0
+    return False
+
+
 @dataclass(frozen=True)
 class CoachingTip:
     phase: str | None

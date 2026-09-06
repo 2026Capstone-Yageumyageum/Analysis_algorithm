@@ -9,6 +9,7 @@ from analysis.coaching_feedback_utils import (
     SEVERITY_WEIGHT,
     AxisRule,
     CoachingTip,
+    is_favorable,
     joint_name,
     magnitude_word,
     make_tip,
@@ -189,15 +190,6 @@ def _phase_score_tips(phase_scores: list[dict[str, Any]]) -> list[CoachingTip]:
     return tips
 
 
-def _is_favorable(rule: AxisRule, diff: float) -> bool:
-    """이 차이가 '힘 전달' 관점에서 더 유리한 방향인지(최고의 1구 비교 전용 해석)."""
-    if rule.favorable_direction == "positive":
-        return diff > 0
-    if rule.favorable_direction == "negative":
-        return diff < 0
-    return False
-
-
 def _evaluate_axis_rules(
     user_pose: pd.DataFrame, pro_pose: pd.DataFrame, user_phases: Any, pro_phases: Any
 ) -> list[tuple[AxisRule, Any, Any, float, float, float]]:
@@ -225,7 +217,7 @@ def _favorable_axis_tips(
     for rule, user_point, pro_point, user_value, pro_value, diff in _evaluate_axis_rules(
         user_pose, pro_pose, user_phases, pro_phases
     ):
-        if not _is_favorable(rule, diff):
+        if not is_favorable(rule, diff):
             continue
         label = phase_label(user_phases, rule.phase)
         message = (
@@ -263,7 +255,7 @@ def _axis_metric_tips(
         user_pose, pro_pose, user_phases, pro_phases
     ):
         # 최고의 1구 비교에서 '힘 전달에 더 유리한' 차이는 bad가 아니라 good(코멘트)로 보낸다.
-        if skip_favorable and _is_favorable(rule, diff):
+        if skip_favorable and is_favorable(rule, diff):
             continue
         word = magnitude_word(abs(diff) / rule.threshold)
         core = rule.positive_message if diff > 0 else rule.negative_message
