@@ -85,6 +85,15 @@ def test_difference_keeps_sign_and_threshold_decides_status() -> None:
     assert knee["status"] == "warn"                 # pro 모드에선 유리해도 warn
 
 
+def test_difference_is_negative_when_user_is_below_reference() -> None:
+    # 위 테스트(user 0.9 vs pro 0.5)는 +0.4만 다뤄서, difference를 abs()로 바꿔도
+    # 값이 똑같이 통과해 부호 보존을 검증하지 못했다. user < pro인 케이스를 추가해
+    # 음수 부호가 실제로 살아남는지 확인한다.
+    metrics = build_phase_metrics(_pose(0.3), _pose(0.5), _phases(), _phases())
+    knee = next(m for m in metrics if m["key"] == "leg_lift_knee_height")
+    assert round(knee["difference"], 4) == -0.2     # 부호 유지: 사용자 - 기준(음수)
+
+
 def test_favorable_only_in_best_pitch_mode() -> None:
     metrics = build_phase_metrics(
         _pose(0.9), _pose(0.5), _phases(), _phases(), comparison_mode="best_pitch"
