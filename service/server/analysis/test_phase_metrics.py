@@ -132,3 +132,55 @@ def test_axis_metrics_carry_null_unit() -> None:
     axis_metrics = [m for m in metrics if m["key"] in axis_keys]
     assert len(axis_metrics) == 8
     assert all("unit" in m and m["unit"] is None for m in axis_metrics)
+
+
+def _left_handed_pose(knee_y: float) -> pd.DataFrame:
+    """좌완 포즈. joint_name()이 throwing_side 컬럼을 읽어 left_* 를 고르게 한다."""
+    pose = _pose(knee_y)
+    pose["throwing_side"] = "left"
+    pose["stride_side"] = "right"
+    return pose
+
+
+def test_axis_metric_reports_one_joint() -> None:
+    metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
+    knee = next(m for m in metrics if m["key"] == "leg_lift_knee_height")
+    assert knee["userJoints"] == ["left_knee"]
+    assert knee["proJoints"] == ["left_knee"]
+
+
+def test_arm_slot_reports_shoulder_and_elbow() -> None:
+    metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
+    slot = next(m for m in metrics if m["key"] == "stride_arm_slot")
+    assert slot["userJoints"] == ["right_shoulder", "right_elbow"]
+
+
+def test_elbow_flexion_puts_the_vertex_in_the_middle() -> None:
+    """가운데가 꼭짓점이다. 순서가 바뀌면 앱이 엉뚱한 각을 그린다."""
+    metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
+    flexion = next(m for m in metrics if m["key"] == "stride_elbow_flexion")
+    assert flexion["userJoints"] == ["right_shoulder", "right_elbow", "right_wrist"]
+
+
+def test_each_side_is_resolved_separately() -> None:
+    """우완 사용자가 좌완과 비교하면 양쪽이 서로 다른 팔을 잰다."""
+    metrics = build_phase_metrics(
+        _pose(0.5), _left_handed_pose(0.5), _phases(), _phases()
+    )
+    slot = next(m for m in metrics if m["key"] == "acceleration_arm_slot")
+    assert slot["userJoints"] == ["right_shoulder", "right_elbow"]
+    assert slot["proJoints"] == ["left_shoulder", "left_elbow"]
+
+
+def test_joints_are_present_even_when_unavailable() -> None:
+    """값을 못 구해도 어느 관절을 보려 했는지는 알려준다."""
+    empty = pd.DataFrame([{"frame_index": float(f)} for f in range(0, 51)])
+    metrics = build_phase_metrics(empty, empty, _phases(), _phases())
+    assert all(m["userJoints"] and m["proJoints"] for m in metrics)
+
+
+def test_both_sides_have_the_same_shape() -> None:
+    metrics = build_phase_metrics(
+        _pose(0.5), _left_handed_pose(0.5), _phases(), _phases()
+    )
+    assert all(len(m["userJoints"]) == len(m["proJoints"]) for m in metrics)

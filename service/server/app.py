@@ -69,6 +69,8 @@ PUBLIC_PHASE_METRIC_FIELDS = (
     "status",
     "favorableDirection",
     "why",
+    "userJoints",
+    "proJoints",
     "userFrame",
     "proFrame",
 )

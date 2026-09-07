@@ -27,6 +27,8 @@ PHASE_METRIC = {
     "status": "good",
     "favorableDirection": None,
     "why": "암슬롯이 투구마다 흔들리면 릴리즈 포인트가 달라집니다.",
+    "userJoints": ["right_shoulder", "right_elbow"],
+    "proJoints": ["left_shoulder", "left_elbow"],
     "userFrame": 62,
     "proFrame": 58,
 }

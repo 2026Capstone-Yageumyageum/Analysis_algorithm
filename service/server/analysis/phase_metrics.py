@@ -81,6 +81,8 @@ def _evaluate(
         "threshold": resolve_threshold(rule, tolerances, decimals=4),
         "favorableDirection": rule.favorable_direction,
         "why": rule.why,
+        "userJoints": joints_for_axis_rule(user_pose, rule),
+        "proJoints": joints_for_axis_rule(pro_pose, rule),
     }
 
     user_value, user_frame = axis_value_at_phase(user_pose, user_phases, rule)
@@ -121,6 +123,23 @@ def resolve_threshold(rule: Any, tolerances: dict[str, float] | None, *, decimal
     if measured is not None and math.isfinite(measured) and measured > 0:
         return round(float(measured), decimals)
     return round(rule.threshold, decimals)
+
+
+def joints_for_axis_rule(pose: pd.DataFrame, rule: AxisRule) -> list[str]:
+    """이 축 규칙이 보는 관절 이름. 손잡이가 이미 해소된 실제 컬럼 이름이다."""
+    return [joint_name(pose, rule.joint_role)]
+
+
+def joints_for_angle_rule(pose: pd.DataFrame, rule: AngleRule) -> list[str]:
+    """이 각도 규칙이 보는 관절 이름.
+
+    순서가 의미를 갖는다 — 굽힘각은 가운데(팔꿈치)가 꼭짓점이다. 앱은 이 순서로
+    각을 그리므로 바꾸면 엉뚱한 각이 그려진다.
+    """
+    names = [joint_name(pose, "throwing_shoulder"), joint_name(pose, "throwing_elbow")]
+    if rule.kind != ARM_SLOT:
+        names.append(joint_name(pose, "throwing_wrist"))
+    return names
 
 
 def axis_value_at_phase(pose, phases, rule) -> tuple[float | None, Any]:
@@ -170,6 +189,8 @@ def _evaluate_angle(
         "threshold": threshold,
         "favorableDirection": None,
         "why": rule.why,
+        "userJoints": joints_for_angle_rule(user_pose, rule),
+        "proJoints": joints_for_angle_rule(pro_pose, rule),
     }
 
     user_angle, user_frame = angle_value_at_phase(user_pose, user_phases, rule)
