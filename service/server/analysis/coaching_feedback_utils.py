@@ -177,6 +177,7 @@ def joint_name(table: pd.DataFrame, role: str) -> str:
     throwing_side = side_value(table, "throwing_side", "right")
     stride_side = side_value(table, "stride_side", "left" if throwing_side == "right" else "right")
     names = {
+        "throwing_shoulder": f"{throwing_side}_shoulder",
         "throwing_wrist": f"{throwing_side}_wrist",
         "throwing_elbow": f"{throwing_side}_elbow",
         "stride_knee": f"{stride_side}_knee",

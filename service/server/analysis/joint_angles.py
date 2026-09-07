@@ -11,6 +11,7 @@ body-frame 정규화는 골반 중심 이동 + 몸통축 직교 회전 + 단일 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from analysis.coaching_feedback_utils import PosePoint
 
@@ -46,3 +47,62 @@ def arm_slot_degrees(shoulder: PosePoint, elbow: PosePoint) -> float | None:
     if math.hypot(upper_x, upper_y) < DEGENERATE:
         return None
     return math.degrees(math.atan2(abs(upper_x), upper_y))
+
+
+@dataclass(frozen=True)
+class AngleRule:
+    """각도 지표 한 개의 규칙.
+
+    관절 역할은 kind가 정한다 — 굽힘각은 어깨·팔꿈치·손목, 암슬롯은 어깨·팔꿈치.
+    percent는 전부 기존 AXIS_RULES가 이미 쓰는 시점이다. 새 시점을 만들면 같은
+    구간 안에서도 "이 순간 보기"가 지표마다 다른 프레임으로 튄다.
+    """
+
+    phase: str
+    kind: str  # "elbow_flexion" | "arm_slot"
+    percent: float
+    threshold: float
+    category: str
+    metric_label: str
+    why: str
+
+
+ELBOW_FLEXION = "elbow_flexion"
+ARM_SLOT = "arm_slot"
+
+# 임계값 15°/10°는 코칭 통념에 기반한 판단값이다. 기존 축 지표의 임계값과 마찬가지로
+# 라벨링된 데이터셋에서 나온 값이 아니므로, 실기기에서 보면서 여기서 조정한다.
+ANGLE_RULES = (
+    AngleRule(
+        "leg_lift", ELBOW_FLEXION, 100.0, 15.0, "leg_lift_elbow_flexion", "팔꿈치 굽힘각",
+        "레그 리프트 시점의 팔 접힘은 이후 팔 스윙의 출발 자세를 정합니다.",
+    ),
+    AngleRule(
+        "leg_lift", ARM_SLOT, 100.0, 10.0, "leg_lift_arm_slot", "암슬롯(상완 기울기)",
+        "이 시점의 팔 높이가 흔들리면 이후 동작 전체가 따라 흔들립니다.",
+    ),
+    AngleRule(
+        "stride", ELBOW_FLEXION, 100.0, 15.0, "stride_elbow_flexion", "팔꿈치 굽힘각",
+        "디딤발이 닿는 순간의 팔 접힘은 팔 스윙이 늦지 않았는지 보여줍니다.",
+    ),
+    AngleRule(
+        "stride", ARM_SLOT, 100.0, 10.0, "stride_arm_slot", "암슬롯(상완 기울기)",
+        "디딤발 착지 때 팔이 올라와 있어야 합니다. 늦으면 어깨에 부담이 몰립니다.",
+    ),
+    AngleRule(
+        "acceleration", ELBOW_FLEXION, 85.0, 15.0, "acceleration_elbow_flexion", "팔꿈치 굽힘각",
+        "릴리즈 직전 팔꿈치 각도는 공에 실리는 힘과 팔꿈치 부하를 함께 좌우합니다.",
+    ),
+    AngleRule(
+        "acceleration", ARM_SLOT, 85.0, 10.0, "acceleration_arm_slot", "암슬롯(상완 기울기)",
+        "암슬롯이 투구마다 흔들리면 릴리즈 포인트가 달라져 제구가 무너집니다.",
+    ),
+    AngleRule(
+        "follow_through", ELBOW_FLEXION, 80.0, 15.0, "follow_through_elbow_flexion", "팔꿈치 굽힘각",
+        "던진 뒤 팔이 자연스럽게 펴지는지는 감속이 제대로 되는지를 보여줍니다.",
+    ),
+    AngleRule(
+        "follow_through", ARM_SLOT, 80.0, 10.0, "follow_through_arm_slot", "암슬롯(상완 기울기)",
+        "마무리 팔 경로가 일정해야 어깨·팔꿈치 부담이 분산됩니다.",
+    ),
+)

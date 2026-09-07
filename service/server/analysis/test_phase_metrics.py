@@ -73,9 +73,12 @@ def _pose(knee_y: float) -> pd.DataFrame:
 
 def test_every_rule_produces_an_item_even_when_within_threshold() -> None:
     metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
-    # 차이가 0이어도 8개 규칙 전부가 항목이 되어야 접었다 펼치는 점검표가 된다.
-    assert len(metrics) == 8
-    assert {m["status"] for m in metrics} == {"good"}
+    # 차이가 0이어도 16개 규칙 전부가 항목이 되어야 접었다 펼치는 점검표가 된다.
+    assert len(metrics) == 16  # 축 지표 8 + 각도 지표 8
+    # _pose()는 축 지표가 보는 관절만 채운다. 어깨가 없어 각도 지표는 unavailable이다.
+    axis_keys = {rule.category for rule in AXIS_RULES}
+    assert {m["status"] for m in metrics if m["key"] in axis_keys} == {"good"}
+    assert {m["status"] for m in metrics if m["key"] not in axis_keys} == {"unavailable"}
 
 
 def test_difference_keeps_sign_and_threshold_decides_status() -> None:
@@ -107,7 +110,7 @@ def test_favorable_only_in_best_pitch_mode() -> None:
 def test_missing_joint_yields_unavailable_with_null_values() -> None:
     empty = pd.DataFrame([{"frame_index": float(f)} for f in range(0, 51)])
     metrics = build_phase_metrics(empty, empty, _phases(), _phases())
-    assert len(metrics) == 8
+    assert len(metrics) == 16  # 축 지표 8 + 각도 지표 8
     assert {m["status"] for m in metrics} == {"unavailable"}
     assert all(m["userValue"] is None and m["difference"] is None for m in metrics)
 
