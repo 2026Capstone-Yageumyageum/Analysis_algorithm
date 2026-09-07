@@ -54,6 +54,25 @@ PUBLIC_PHASE_SCORE_FIELDS = (
     "proEndFrame",
 )
 
+# 구간 상세 지표. 필드가 하나라도 빠지면 앱에서 그 기능이 조용히 죽는다 —
+# unit이 없으면 각도가 좌표처럼 표기되고, userFrame이 없으면 "이 순간 보기"가
+# 사라지며, threshold가 없으면 게이지가 그려지지 않는다.
+PUBLIC_PHASE_METRIC_FIELDS = (
+    "phase",
+    "key",
+    "label",
+    "unit",
+    "userValue",
+    "proValue",
+    "difference",
+    "threshold",
+    "status",
+    "favorableDirection",
+    "why",
+    "userFrame",
+    "proFrame",
+)
+
 app = Flask(
     __name__,
     template_folder=str(WEB_ROOT / "templates"),
@@ -823,6 +842,7 @@ def _rank_player_matches(
                 "phaseScores": similarity.get("phaseScores", []),
                 "release": similarity.get("release", {}),
                 "feedback": similarity.get("feedback", {"good": [], "bad": []}),
+                "phaseMetrics": similarity.get("phaseMetrics", []),
             }
         )
 
@@ -846,6 +866,7 @@ def _rank_player_matches(
             "phaseScores": _compact_phase_scores(match.get("phaseScores")),
             "release": _compact_release(match.get("release")),
             "feedback": _compact_feedback(match.get("feedback")),
+            "phaseMetrics": _compact_phase_metrics(match.get("phaseMetrics")),
         }
         players.append(player)
     return players
@@ -859,6 +880,16 @@ def _compact_phase_scores(phase_scores: Any) -> list[dict[str, Any]]:
 
 def _compact_phase_score(phase_score: dict[str, Any]) -> dict[str, Any]:
     return {field_name: phase_score.get(field_name) for field_name in PUBLIC_PHASE_SCORE_FIELDS}
+
+
+def _compact_phase_metrics(phase_metrics: Any) -> list[dict[str, Any]]:
+    if not isinstance(phase_metrics, list):
+        return []
+    return [_compact_phase_metric(item) for item in phase_metrics if isinstance(item, dict)]
+
+
+def _compact_phase_metric(phase_metric: dict[str, Any]) -> dict[str, Any]:
+    return {field_name: phase_metric.get(field_name) for field_name in PUBLIC_PHASE_METRIC_FIELDS}
 
 
 def _compact_release(release: Any) -> dict[str, Any]:
