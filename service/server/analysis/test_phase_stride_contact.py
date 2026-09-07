@@ -4,7 +4,9 @@ import math
 
 import pandas as pd
 
-from phase import detect_pitch_phases
+import numpy as np
+
+from phase import _choose_stride_foot_landing, detect_pitch_phases
 
 
 def _smoothstep(value: float) -> float:
@@ -143,7 +145,56 @@ def test_stride_contact_ignores_in_air_plateau_without_release_event() -> None:
     assert 188 <= float(stride_frame) <= 194, f"공중 평탄부를 착지로 잡았다: {stride_frame}"
 
 
+def _forward_reach_pose_table() -> pd.DataFrame:
+    """디딤발이 앞으로 뻗으며 착지하는 신호.
+
+    수직 궤적은 포물선 후반부처럼 감속한다(ease-out) — 절반쯤 진행한 시점에
+    이미 하강폭의 86%를 넘고 수직 속도도 느려진다. 하지만 발은 그때까지도
+    수평으로 계속 앞으로 이동 중이고, 실제 착지는 70프레임이다.
+
+    수직 정보만 보는 판정은 여기서 45 근처를 착지로 잡는다.
+    """
+    lift, contact, total = 20, 70, 120
+    rows = []
+    for frame in range(total):
+        if frame <= lift:
+            foot_y, foot_x = 0.60, 0.30
+        elif frame <= contact:
+            t = (frame - lift) / (contact - lift)
+            foot_y = 0.60 + (0.25 * (1.0 - ((1.0 - t) ** 3)))  # 빠르게 내려왔다가 감속
+            foot_x = 0.30 + (0.40 * t)  # 착지까지 일정하게 앞으로 이동
+        else:
+            foot_y, foot_x = 0.85, 0.70  # 착지 후에는 멈춘다
+        rows.append(
+            {
+                "frame_index": frame,
+                "left_foot_index_image_x": foot_x,
+                "left_foot_index_image_y": foot_y,
+                "left_foot_index_confidence": 0.95,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def test_stride_contact_waits_for_forward_motion_to_stop() -> None:
+    """착지는 '앞으로 가던 발이 멈추는 것'이다.
+
+    수직 속도만 보면 포물선 후반부에서 발이 아직 앞으로 뻗는 중인데도 감속만으로
+    착지 조건을 통과한다. 실측에서 "착지까지 50% 진행됐을 때 스트라이드가 끝난다"고
+    관측된 것이 이 경우다.
+    """
+    pose_table = _forward_reach_pose_table()
+    candidates = np.arange(20, 108)
+
+    landing = _choose_stride_foot_landing(
+        pose_table, candidates, "left_foot_index", fallback=90
+    )
+
+    assert 68 <= landing <= 74, f"앞으로 뻗는 중을 착지로 잡았다: {landing}"
+
+
 if __name__ == "__main__":
     test_stride_contact_uses_release_bounded_final_landing()
     test_stride_contact_ignores_in_air_plateau_without_release_event()
+    test_stride_contact_waits_for_forward_motion_to_stop()
     print("ok")

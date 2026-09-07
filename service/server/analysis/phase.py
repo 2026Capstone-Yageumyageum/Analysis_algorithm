@@ -331,11 +331,33 @@ def _choose_stride_foot_landing(
     in_final_descent = np.zeros(len(candidate_array), dtype=bool)
     in_final_descent[final_descent_start:] = True
 
+    # 착지는 "앞으로 가던 발이 멈추는 것"이다. 수직 속도만 보면 포물선 후반부에서
+    # 발이 아직 앞으로 뻗는 중인데도 감속만으로 조건을 통과한다 — 실측에서 착지까지
+    # 절반쯤 진행한 시점이 착지로 잡혔다. 수평 좌표가 있으면 그것도 함께 본다.
+    #
+    # 수평 좌표가 없는 데이터(구형 CSV, 정규화 좌표만 있는 경우)에서는 이 조건을
+    # 걸지 않아 기존 동작을 그대로 둔다.
+    horizontal_series = (
+        _joint_image_x(df, joint).astype(float).rolling(window=5, center=True, min_periods=1).median()
+    )
+    horizontal_speed = (
+        horizontal_series.diff().rolling(window=5, center=True, min_periods=1).median().abs().iloc[candidates]
+    )
+    valid_horizontal = horizontal_speed.replace([np.inf, -np.inf], np.nan).dropna()
+    if valid_horizontal.empty:
+        horizontal_settled = np.ones(len(candidate_array), dtype=bool)
+    else:
+        horizontal_threshold = max(0.006, min(0.018, float(valid_horizontal.quantile(0.35)) * 1.35))
+        horizontal_values = horizontal_speed.to_numpy(dtype=float)
+        # 값을 못 구한 프레임은 막지 않는다. 판정을 못 하는 것과 움직이는 것은 다르다.
+        horizontal_settled = ~np.isfinite(horizontal_values) | (horizontal_values <= horizontal_threshold)
+
     settled = candidate_array[
         reached
         & in_final_descent
         & np.isfinite(velocity_values)
         & (velocity_values <= velocity_threshold)
+        & horizontal_settled
     ]
     if len(settled):
         return int(settled[0])
@@ -401,6 +423,13 @@ def _joint_image_y(df: pd.DataFrame, joint: str) -> pd.Series:
     if image_column in df.columns:
         return _series(df, image_column)
     return _series(df, f"{joint}_body_y")
+
+
+def _joint_image_x(df: pd.DataFrame, joint: str) -> pd.Series:
+    image_column = f"{joint}_image_x"
+    if image_column in df.columns:
+        return _series(df, image_column)
+    return _series(df, f"{joint}_body_x")
 
 
 def _empty_representatives() -> dict[str, int | None]:
