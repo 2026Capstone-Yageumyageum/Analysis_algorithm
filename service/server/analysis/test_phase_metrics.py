@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
+from analysis.coaching_feedback import AXIS_RULES
 from analysis.coaching_feedback_utils import AxisRule, is_favorable
 from analysis.phase_metrics import build_phase_metrics
 
@@ -119,3 +120,12 @@ def test_item_carries_label_why_and_frames() -> None:
     assert knee["why"]                      # 왜 중요한지가 필드로 온다
     assert knee["userFrame"] == 20          # leg_lift 10~20의 100% 지점
     assert knee["favorableDirection"] == "positive"
+
+
+def test_axis_metrics_carry_null_unit() -> None:
+    """축 지표는 단위 없는 정규화 좌표다. 필드를 항상 실어 앱이 분기하기 쉽게 한다."""
+    metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
+    axis_keys = {rule.category for rule in AXIS_RULES}
+    axis_metrics = [m for m in metrics if m["key"] in axis_keys]
+    assert len(axis_metrics) == 8
+    assert all("unit" in m and m["unit"] is None for m in axis_metrics)

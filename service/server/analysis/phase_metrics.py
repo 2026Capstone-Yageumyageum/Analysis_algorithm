@@ -56,6 +56,8 @@ def _evaluate(
         "phase": rule.phase,
         "key": rule.category,
         "label": rule.metric_label,
+        # 축 지표는 body-frame 정규화 좌표라 단위가 없다. 각도 지표와 구분하는 값이다.
+        "unit": None,
         "threshold": round(rule.threshold, 4),
         "favorableDirection": rule.favorable_direction,
         "why": rule.why,
