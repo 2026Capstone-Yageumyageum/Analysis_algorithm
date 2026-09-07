@@ -310,16 +310,37 @@ def _choose_stride_foot_landing(
     candidate_array = np.asarray(candidates)
     y_values = foot_y.to_numpy(dtype=float)
     velocity_values = velocity.to_numpy(dtype=float)
+    reached = np.isfinite(y_values) & (y_values >= landing_threshold)
+    if not reached.any():
+        return _choose(candidates, foot_y, mode="max", fallback=fallback)
+
+    # 마지막 하강 안에서만 착지를 찾는다.
+    #
+    # 디딤발을 앞으로 뻗는 도중 발이 수직으로 잠깐 평평해지는 구간이 있다. 판정이
+    # 수직 속도만 보기 때문에 그 평탄부가 착지선과 속도 조건을 둘 다 통과해, 아직
+    # 공중인데 착지로 잡히곤 했다(관측 데이터에서 실제 착지 191 대신 163).
+    #
+    # 진짜 착지와 다른 점은 그 뒤에 있다 — 평탄부 뒤에는 발이 다시 올라가지만
+    # 착지 뒤에는 내려가 있다. 그래서 가장 낮은 지점이 속한 연속 구간의 시작을
+    # 착지로 본다. 가장 낮은 지점 자체를 쓰지 않는 이유는 그대로다: 그건 가속
+    # 구간에서 더 늦게 나타날 수 있다.
+    deepest = int(np.argmax(np.where(np.isfinite(y_values), y_values, -np.inf)))
+    final_descent_start = deepest
+    while final_descent_start > 0 and reached[final_descent_start - 1]:
+        final_descent_start -= 1
+    in_final_descent = np.zeros(len(candidate_array), dtype=bool)
+    in_final_descent[final_descent_start:] = True
+
     settled = candidate_array[
-        np.isfinite(y_values)
+        reached
+        & in_final_descent
         & np.isfinite(velocity_values)
-        & (y_values >= landing_threshold)
         & (velocity_values <= velocity_threshold)
     ]
     if len(settled):
         return int(settled[0])
 
-    landed = candidate_array[np.isfinite(y_values) & (y_values >= landing_threshold)]
+    landed = candidate_array[reached & in_final_descent]
     if len(landed):
         return int(landed[0])
 

@@ -126,6 +126,24 @@ def test_stride_contact_uses_release_bounded_final_landing() -> None:
     assert 190 <= float(stride_frame) <= 193
 
 
+def test_stride_contact_ignores_in_air_plateau_without_release_event() -> None:
+    """릴리즈 검출이 꺼진 기본 경로에서도 공중 평탄부를 착지로 오인하면 안 된다.
+
+    BALL_RELEASE_DETECTION은 기본값이 꺼짐이라 운영에서는 release_event_override가
+    없는 이 경로가 돈다. 그런데 같은 신호의 163~167에는 공중 평탄부가 있다 —
+    디딤발을 앞으로 뻗는 중이라 수직 속도만 0에 가까울 뿐 아직 땅에 닿지 않았고,
+    그 뒤 발은 다시 올라간다(185에서 0.7563). 진짜 착지는 191 근처다.
+
+    수직 속도만 보는 판정은 이 둘을 구분하지 못한다.
+    """
+    phases = detect_pitch_phases(_y2_like_pose_table())
+
+    stride_frame = phases.representative_frames["stride"]
+    assert stride_frame is not None
+    assert 188 <= float(stride_frame) <= 194, f"공중 평탄부를 착지로 잡았다: {stride_frame}"
+
+
 if __name__ == "__main__":
     test_stride_contact_uses_release_bounded_final_landing()
+    test_stride_contact_ignores_in_air_plateau_without_release_event()
     print("ok")
