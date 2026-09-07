@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from limb_consistency import resolve_side_swaps
+from analysis.limb_consistency import resolve_side_swaps
 
 
 BODY_JOINTS = (

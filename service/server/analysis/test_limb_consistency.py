@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from limb_consistency import LOWER_BODY_PAIRS, resolve_side_swaps
+from analysis.limb_consistency import LOWER_BODY_PAIRS, resolve_side_swaps
 
 
 def _leg_frame(frame: int, left_x: float, left_y: float, right_x: float, right_y: float) -> dict[str, float]:
