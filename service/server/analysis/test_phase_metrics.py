@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace
 
 import pandas as pd
 
 from analysis.coaching_feedback import AXIS_RULES
 from analysis.coaching_feedback_utils import AxisRule, is_favorable
+from analysis.joint_angles import ANGLE_RULES, ARM_SLOT, ELBOW_FLEXION
+from analysis.normalization import BODY_JOINTS
 from analysis.phase_metrics import build_phase_metrics
 
 
@@ -142,6 +145,22 @@ def _left_handed_pose(knee_y: float) -> pd.DataFrame:
     return pose
 
 
+def _full_pose() -> pd.DataFrame:
+    """BODY_JOINTS 전부를 채운 포즈. 축 지표뿐 아니라 각도 지표(어깨·팔꿈치·손목)도
+    양쪽 손잡이 어느 쪽으로 풀려도 유효한 점을 찾도록 한다. 관절마다 좌표를 다르게 둬
+    벡터가 퇴화(길이 0)해 각도가 None이 되는 일이 없게 한다 — 이 테스트는 실제 각도값이
+    아니라 정렬 공식 일치를 확인하는 것이 목적이라 각도가 얼마인지는 상관없다."""
+    rows = []
+    for frame in range(0, 51):
+        row: dict[str, float] = {"frame_index": float(frame)}
+        for i, joint in enumerate(BODY_JOINTS):
+            row[f"{joint}_body_x"] = 0.05 * (i + 1)
+            row[f"{joint}_body_y"] = 0.03 * (i + 1)
+            row[f"{joint}_confidence"] = 0.9
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def test_axis_metric_reports_one_joint() -> None:
     metrics = build_phase_metrics(_pose(0.5), _pose(0.5), _phases(), _phases())
     knee = next(m for m in metrics if m["key"] == "leg_lift_knee_height")
@@ -184,3 +203,84 @@ def test_both_sides_have_the_same_shape() -> None:
         _pose(0.5), _left_handed_pose(0.5), _phases(), _phases()
     )
     assert all(len(m["userJoints"]) == len(m["proJoints"]) for m in metrics)
+
+
+# ── 아래 세 테스트는 분석 서버 → 백엔드 → 앱을 잇는 계약을 검증한다. 앱에는 테스트
+# 러너가 없으므로(러너 부재는 프론트엔드 리포지토리 쪽 사정), 이 세 저장소를 잇는
+# 불변식을 지키는 방어선은 여기뿐이다(전체 리뷰 Important 4).
+
+
+def test_joint_count_matches_rule_geometry() -> None:
+    """앱은 배열 길이로 그릴 기하를 정한다: 축 지표=1(강조만), 암슬롯=2(몸통축 대비 각),
+    굽힘각=3(가운데가 꼭짓점). 여기서 길이가 하나라도 규칙 종류와 안 맞으면 앱이 엉뚱한
+    각도를 그리거나 그려야 할 강조를 놓친다."""
+    metrics = build_phase_metrics(_pose(0.5), _left_handed_pose(0.5), _phases(), _phases())
+    axis_keys = {rule.category for rule in AXIS_RULES}
+    arm_slot_keys = {rule.category for rule in ANGLE_RULES if rule.kind == ARM_SLOT}
+    flexion_keys = {rule.category for rule in ANGLE_RULES if rule.kind == ELBOW_FLEXION}
+    assert len(metrics) == len(axis_keys) + len(arm_slot_keys) + len(flexion_keys)
+
+    for m in metrics:
+        if m["key"] in axis_keys:
+            expected = 1
+        elif m["key"] in arm_slot_keys:
+            expected = 2
+        elif m["key"] in flexion_keys:
+            expected = 3
+        else:
+            raise AssertionError(f"unclassified metric key: {m['key']}")
+        assert len(m["userJoints"]) == expected, m["key"]
+        assert len(m["proJoints"]) == expected, m["key"]
+
+
+def test_joint_names_are_known_body_joints() -> None:
+    """joint_name()은 역할이 매핑 테이블에 없으면 role 문자열을 그대로 돌려준다. 그런 role이
+    새로 생기면 여기서 걸리지 않는 한 앱은 "관절이 가려져 표시할 수 없어요"만 조용히 띄우고,
+    왜 항상 그런지는 아무도 모른다. userJoints/proJoints의 모든 이름이 앱이 아는 15개 관절
+    (analysis.normalization.BODY_JOINTS) 안에 있는지 전 규칙에 대해 확인한다."""
+    metrics = build_phase_metrics(_pose(0.5), _left_handed_pose(0.5), _phases(), _phases())
+    for m in metrics:
+        for name in [*m["userJoints"], *m["proJoints"]]:
+            assert name in BODY_JOINTS, f"{m['key']}: unknown joint name {name!r}"
+
+
+def test_pro_frame_matches_app_alignment_formula() -> None:
+    """앱의 alignToCompareFrame 규칙 —
+    proStart + (fu - userStart) / (userEnd - userStart) * (proEnd - proStart)
+    — 이 각 지표의 proFrame과 일치해야 "이 순간 보기"에서 그려지는 프레임이 라벨이
+    단언하는 그 순간과 같아진다. 같은 intervals로 phase_frame을 사용자·프로 양쪽에
+    부른 것과 동치임을 확인한다.
+
+    사용자 구간(10프레임)보다 프로 구간을 몇 배 길게 둬(가속 구간 40프레임) 리뷰
+    Important 3이 지적한 증폭 시나리오도 함께 지나가게 한다.
+    """
+    user_phases = _phases()
+    pro_phases = SimpleNamespace(
+        intervals={
+            "windup": {"startFrame": 5, "endFrame": 23, "label": "와인드업"},
+            "leg_lift": {"startFrame": 23, "endFrame": 53, "label": "레그 리프트"},
+            "stride": {"startFrame": 53, "endFrame": 71, "label": "스트라이드"},
+            # 사용자 10프레임(30~40) vs 프로 40프레임(71~111) — 스냅 오차 증폭 시나리오.
+            "acceleration": {"startFrame": 71, "endFrame": 111, "label": "가속"},
+            "follow_through": {"startFrame": 111, "endFrame": 140, "label": "팔로스루"},
+        }
+    )
+    metrics = build_phase_metrics(_full_pose(), _full_pose(), user_phases, pro_phases)
+    assert len(metrics) > 0
+    checked = 0
+    for m in metrics:
+        if m["userFrame"] is None or m["proFrame"] is None:
+            continue
+        user_span = user_phases.intervals[m["phase"]]
+        pro_span = pro_phases.intervals[m["phase"]]
+        user_start, user_end = user_span["startFrame"], user_span["endFrame"]
+        pro_start, pro_end = pro_span["startFrame"], pro_span["endFrame"]
+        expected = pro_start + (
+            (m["userFrame"] - user_start) / (user_end - user_start)
+        ) * (pro_end - pro_start)
+        # userFrame/proFrame은 frame_value()를 거쳐 반올림돼 있어(최대 5e-5 오차),
+        # 구간 길이비로 증폭돼도 무시할 만한 수준의 허용치를 둔다.
+        assert math.isclose(m["proFrame"], expected, rel_tol=0, abs_tol=1e-2), m["key"]
+        checked += 1
+    # 모든 지표가 unavailable로 스킵되는 회귀(포즈가 잘못돼 아무것도 안 걸리는 경우)를 막는다.
+    assert checked == len(metrics)
