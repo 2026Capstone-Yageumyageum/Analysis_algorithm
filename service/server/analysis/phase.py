@@ -271,6 +271,17 @@ def _choose_highest_joint(df: pd.DataFrame, candidate_indices: np.ndarray, joint
     return _choose(candidates, image_y, mode="min", fallback=fallback)
 
 
+# 착지로 인정하기 위해 수직 정지가 이어져야 하는 프레임 수(60fps 기준), 그리고
+# "정지"로 볼 프레임 간 변화량(하강폭 대비 비율).
+#
+# 라벨 네 개(류현진 51, 원태인 80, 양현종 64, 사용자 245)로 2~5를 재봤다.
+# 2와 3은 넷 다 맞고, 4부터는 양현종이 64→68, 문동주가 226→234로 밀리며,
+# 5에서는 사용자 영상도 245→250이 된다. 되는 범위(2~3)의 위쪽인 3을 쓴다 —
+# 2는 잡음 한 프레임이 조건을 통과시킬 수 있고, 3은 그러면서도 아직 늦지 않다.
+STILL_FRAMES = 3
+STILL_RATIO = 0.02
+
+
 def _choose_stride_foot_landing(
     df: pd.DataFrame,
     candidate_indices: np.ndarray,
@@ -301,15 +312,9 @@ def _choose_stride_foot_landing(
         return _choose(candidates, foot_y, mode="max", fallback=fallback)
 
     landing_threshold = start_y + (descent_range * 0.86)
-    velocity = foot_y_series.diff().rolling(window=5, center=True, min_periods=1).median().abs().iloc[candidates]
-    valid_velocity = velocity.replace([np.inf, -np.inf], np.nan).dropna()
-    velocity_threshold = 0.008
-    if not valid_velocity.empty:
-        velocity_threshold = max(0.006, min(0.018, float(valid_velocity.quantile(0.35)) * 1.35))
 
     candidate_array = np.asarray(candidates)
     y_values = foot_y.to_numpy(dtype=float)
-    velocity_values = velocity.to_numpy(dtype=float)
     reached = np.isfinite(y_values) & (y_values >= landing_threshold)
     if not reached.any():
         return _choose(candidates, foot_y, mode="max", fallback=fallback)
@@ -331,36 +336,28 @@ def _choose_stride_foot_landing(
     in_final_descent = np.zeros(len(candidate_array), dtype=bool)
     in_final_descent[final_descent_start:] = True
 
-    # 착지는 "앞으로 가던 발이 멈추는 것"이다. 수직 속도만 보면 포물선 후반부에서
-    # 발이 아직 앞으로 뻗는 중인데도 감속만으로 조건을 통과한다 — 실측에서 착지까지
-    # 절반쯤 진행한 시점이 착지로 잡혔다. 수평 좌표가 있으면 그것도 함께 본다.
+    # 착지는 "내려온 발이 그대로 멈춰 있는 것"이다.
     #
-    # 수평 좌표가 없는 데이터(구형 CSV, 정규화 좌표만 있는 경우)에서는 이 조건을
-    # 걸지 않아 기존 동작을 그대로 둔다.
-    horizontal_series = (
-        _joint_image_x(df, joint).astype(float).rolling(window=5, center=True, min_periods=1).median()
-    )
-    horizontal_speed = (
-        horizontal_series.diff().rolling(window=5, center=True, min_periods=1).median().abs().iloc[candidates]
-    )
-    valid_horizontal = horizontal_speed.replace([np.inf, -np.inf], np.nan).dropna()
-    if valid_horizontal.empty:
-        horizontal_settled = np.ones(len(candidate_array), dtype=bool)
-    else:
-        horizontal_threshold = max(0.006, min(0.018, float(valid_horizontal.quantile(0.35)) * 1.35))
-        horizontal_values = horizontal_speed.to_numpy(dtype=float)
-        # 값을 못 구한 프레임은 막지 않는다. 판정을 못 하는 것과 움직이는 것은 다르다.
-        horizontal_settled = ~np.isfinite(horizontal_values) | (horizontal_values <= horizontal_threshold)
+    # 처음에는 여기에 수평 정지 조건도 걸었다. 하지만 사용자가 눈으로 확인한 착지
+    # 프레임 네 개를 놓고 보니 그 전제가 틀렸다 — 착지 순간에도 발은 여전히 수평으로
+    # 움직이고 있다(류현진 +0.0315/프레임, 원태인 -0.0117/프레임, 발끝도 발목도).
+    # 후면 촬영에서는 착지 뒤 몸이 돌면서 발이 옆으로 쓸리기까지 한다. 수평 정지를
+    # 요구하면 판정이 릴리즈 이후까지 밀렸다(류현진 실제 51, 검출 62).
+    #
+    # 대신 수직 정지가 이어지는지를 본다. 한 프레임 느려지는 것은 뻗는 도중에도
+    # 일어나지만, 연속으로 멈춰 있는 것은 땅에 닿았을 때만 일어난다.
+    #
+    # 임계는 하강폭에 비례시킨다. 고정 상수는 촬영 거리와 프레임 레이트에 따라 너무
+    # 느슨하거나 빡빡해진다. 평활화한 속도가 아니라 원본 프레임 간 변화량을 쓰는
+    # 이유는, 평활화가 착지 직전의 급감속을 뭉개 정지 시점을 앞당기기 때문이다.
+    still_threshold = max(descent_range * STILL_RATIO, 1e-4)
+    raw_step = foot_y_series.diff().abs().iloc[candidates].to_numpy(dtype=float)
+    still = np.isfinite(raw_step) & (raw_step <= still_threshold)
 
-    settled = candidate_array[
-        reached
-        & in_final_descent
-        & np.isfinite(velocity_values)
-        & (velocity_values <= velocity_threshold)
-        & horizontal_settled
-    ]
-    if len(settled):
-        return int(settled[0])
+    settled = reached & in_final_descent & still
+    for offset in range(len(candidate_array) - STILL_FRAMES + 1):
+        if settled[offset : offset + STILL_FRAMES].all():
+            return int(candidate_array[offset])
 
     landed = candidate_array[reached & in_final_descent]
     if len(landed):
@@ -423,13 +420,6 @@ def _joint_image_y(df: pd.DataFrame, joint: str) -> pd.Series:
     if image_column in df.columns:
         return _series(df, image_column)
     return _series(df, f"{joint}_body_y")
-
-
-def _joint_image_x(df: pd.DataFrame, joint: str) -> pd.Series:
-    image_column = f"{joint}_image_x"
-    if image_column in df.columns:
-        return _series(df, image_column)
-    return _series(df, f"{joint}_body_x")
 
 
 def _empty_representatives() -> dict[str, int | None]:
