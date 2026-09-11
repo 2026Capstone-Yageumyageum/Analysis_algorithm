@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
+# 백엔드 내부 API 공유 키 헤더. 백엔드 SecurityConfig.INTERNAL_API_KEY_HEADER와 같아야 한다.
+INTERNAL_API_KEY_HEADER = "X-Internal-Api-Key"
+
 _CACHE: list[dict[str, Any]] = []
 _CACHE_META: dict[str, Any] = {
     "status": "empty",
@@ -67,8 +70,21 @@ def cache_status() -> dict[str, Any]:
     }
 
 
+def _request_headers() -> dict[str, str]:
+    """백엔드 내부 API 요청 헤더. INTERNAL_API_KEY가 있으면 공유 키를 싣는다.
+
+    백엔드는 키가 설정된 환경(코드스페이스)에서 이 헤더가 없는 내부 API 요청을 403으로 막는다.
+    키가 없는 로컬 개발 환경에서는 지금처럼 헤더 없이 보낸다.
+    """
+    headers = {"Accept": "application/json"}
+    key = os.getenv("INTERNAL_API_KEY", "").strip()
+    if key:
+        headers[INTERNAL_API_KEY_HEADER] = key
+    return headers
+
+
 def _read_json_from_url(url: str) -> Any:
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    request = urllib.request.Request(url, headers=_request_headers())
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             body = response.read().decode("utf-8")
