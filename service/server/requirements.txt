@@ -1,7 +1,9 @@
 Flask>=3.0,<4.0
 Werkzeug>=3.0,<4.0
-opencv-python>=4.9,<5.0
-numpy>=1.26
+# numpy<2 와 호환되는 opencv로 고정 (4.11+ 는 numpy>=2 요구)
+opencv-python>=4.9,<4.11
+# mediapipe 0.10.21 은 numpy<2 필요
+numpy>=1.24,<2
 pandas>=2.2
-mediapipe>=0.10,<1.0; python_version < "3.13"
-
+# 0.10.3x 일부 빌드는 mp.solutions 가 빠져 있어(legacy solutions 제거) 검증된 0.10.21 로 고정
+mediapipe==0.10.21; python_version < "3.13"

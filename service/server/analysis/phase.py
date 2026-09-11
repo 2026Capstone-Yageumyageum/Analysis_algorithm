@@ -271,6 +271,21 @@ def _choose_highest_joint(df: pd.DataFrame, candidate_indices: np.ndarray, joint
     return _choose(candidates, image_y, mode="min", fallback=fallback)
 
 
+# 착지로 인정하기 위해 수직 정지가 이어져야 하는 프레임 수(60fps 기준), 그리고
+# "정지"로 볼 프레임 간 변화량(하강폭 대비 비율).
+#
+# 라벨(류현진 51, 원태인 80, 양현종 71, 사용자 245)로 격자를 훑어 정했다.
+# STILL_RATIO는 0.008~0.012에서 결과가 전혀 흔들리지 않는 평탄 구간이 나온다.
+# 그 가운데인 0.010을 쓴다. STILL_FRAMES는 3과 4가 같은 값을 준다.
+#
+# 임계가 느슨하면(0.02) 하강 도중의 감속 구간이 "정지"로 통과한다. 양현종이
+# 그랬다 — 64~66에서 잠깐 느려졌다가 66~70에 다시 내려가는데, 0.02에서는
+# 하강폭이 커서 임계가 0.0092까지 벌어져 66프레임(Δ0.0091)이 통과했다.
+# 그래서 착지가 71 대신 64로 잡혔고, 스트라이드가 짧고 가속이 긴 형태가 됐다.
+STILL_FRAMES = 3
+STILL_RATIO = 0.010
+
+
 def _choose_stride_foot_landing(
     df: pd.DataFrame,
     candidate_indices: np.ndarray,
@@ -301,25 +316,54 @@ def _choose_stride_foot_landing(
         return _choose(candidates, foot_y, mode="max", fallback=fallback)
 
     landing_threshold = start_y + (descent_range * 0.86)
-    velocity = foot_y_series.diff().rolling(window=5, center=True, min_periods=1).median().abs().iloc[candidates]
-    valid_velocity = velocity.replace([np.inf, -np.inf], np.nan).dropna()
-    velocity_threshold = 0.008
-    if not valid_velocity.empty:
-        velocity_threshold = max(0.006, min(0.018, float(valid_velocity.quantile(0.35)) * 1.35))
 
     candidate_array = np.asarray(candidates)
     y_values = foot_y.to_numpy(dtype=float)
-    velocity_values = velocity.to_numpy(dtype=float)
-    settled = candidate_array[
-        np.isfinite(y_values)
-        & np.isfinite(velocity_values)
-        & (y_values >= landing_threshold)
-        & (velocity_values <= velocity_threshold)
-    ]
-    if len(settled):
-        return int(settled[0])
+    reached = np.isfinite(y_values) & (y_values >= landing_threshold)
+    if not reached.any():
+        return _choose(candidates, foot_y, mode="max", fallback=fallback)
 
-    landed = candidate_array[np.isfinite(y_values) & (y_values >= landing_threshold)]
+    # 마지막 하강 안에서만 착지를 찾는다.
+    #
+    # 디딤발을 앞으로 뻗는 도중 발이 수직으로 잠깐 평평해지는 구간이 있다. 판정이
+    # 수직 속도만 보기 때문에 그 평탄부가 착지선과 속도 조건을 둘 다 통과해, 아직
+    # 공중인데 착지로 잡히곤 했다(관측 데이터에서 실제 착지 191 대신 163).
+    #
+    # 진짜 착지와 다른 점은 그 뒤에 있다 — 평탄부 뒤에는 발이 다시 올라가지만
+    # 착지 뒤에는 내려가 있다. 그래서 가장 낮은 지점이 속한 연속 구간의 시작을
+    # 착지로 본다. 가장 낮은 지점 자체를 쓰지 않는 이유는 그대로다: 그건 가속
+    # 구간에서 더 늦게 나타날 수 있다.
+    deepest = int(np.argmax(np.where(np.isfinite(y_values), y_values, -np.inf)))
+    final_descent_start = deepest
+    while final_descent_start > 0 and reached[final_descent_start - 1]:
+        final_descent_start -= 1
+    in_final_descent = np.zeros(len(candidate_array), dtype=bool)
+    in_final_descent[final_descent_start:] = True
+
+    # 착지는 "내려온 발이 그대로 멈춰 있는 것"이다.
+    #
+    # 처음에는 여기에 수평 정지 조건도 걸었다. 하지만 사용자가 눈으로 확인한 착지
+    # 프레임 네 개를 놓고 보니 그 전제가 틀렸다 — 착지 순간에도 발은 여전히 수평으로
+    # 움직이고 있다(류현진 +0.0315/프레임, 원태인 -0.0117/프레임, 발끝도 발목도).
+    # 후면 촬영에서는 착지 뒤 몸이 돌면서 발이 옆으로 쓸리기까지 한다. 수평 정지를
+    # 요구하면 판정이 릴리즈 이후까지 밀렸다(류현진 실제 51, 검출 62).
+    #
+    # 대신 수직 정지가 이어지는지를 본다. 한 프레임 느려지는 것은 뻗는 도중에도
+    # 일어나지만, 연속으로 멈춰 있는 것은 땅에 닿았을 때만 일어난다.
+    #
+    # 임계는 하강폭에 비례시킨다. 고정 상수는 촬영 거리와 프레임 레이트에 따라 너무
+    # 느슨하거나 빡빡해진다. 평활화한 속도가 아니라 원본 프레임 간 변화량을 쓰는
+    # 이유는, 평활화가 착지 직전의 급감속을 뭉개 정지 시점을 앞당기기 때문이다.
+    still_threshold = max(descent_range * STILL_RATIO, 1e-4)
+    raw_step = foot_y_series.diff().abs().iloc[candidates].to_numpy(dtype=float)
+    still = np.isfinite(raw_step) & (raw_step <= still_threshold)
+
+    settled = reached & in_final_descent & still
+    for offset in range(len(candidate_array) - STILL_FRAMES + 1):
+        if settled[offset : offset + STILL_FRAMES].all():
+            return int(candidate_array[offset])
+
+    landed = candidate_array[reached & in_final_descent]
     if len(landed):
         return int(landed[0])
 

@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from analysis.limb_consistency import resolve_side_swaps
+
 
 BODY_JOINTS = (
     "nose",
@@ -38,6 +40,10 @@ def build_body_frame_pose(keypoints_df: pd.DataFrame) -> NormalizedPose:
     warnings: list[str] = []
     if keypoints_df.empty:
         return NormalizedPose(table=pd.DataFrame(), summary={"status": "empty"}, warnings=["keypoints가 비어 있습니다."])
+
+    # 후면 촬영에서 MediaPipe가 좌우 다리를 혼동한다. 정규화보다 먼저 되돌려야
+    # 이후의 모든 지표와 구간 검출이 같은 다리를 본다.
+    keypoints_df = resolve_side_swaps(keypoints_df)
 
     required_columns = [
         "left_hip_x_smooth",

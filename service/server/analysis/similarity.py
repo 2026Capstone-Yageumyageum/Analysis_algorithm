@@ -12,6 +12,7 @@ from analysis.ball_release import estimate_ball_release_event
 from analysis.feedback import build_analysis_feedback
 from analysis.normalization import build_body_frame_pose
 from analysis.phase import detect_pitch_phases
+from analysis.phase_metrics import build_phase_metrics
 from analysis.resampling_preview import build_resampled_phase_previews
 
 
@@ -59,6 +60,7 @@ def compute_similarity(
     user_video_path: Path | None = None,
     pro_video_path: Path | None = None,
     release_events: dict[str, dict[str, Any]] | None = None,
+    comparison_mode: str = "pro",
 ) -> dict[str, Any]:
     user_df = pd.read_csv(StringIO(user_csv_text))
     pro_df = pd.read_csv(StringIO(pro_csv_text))
@@ -101,6 +103,15 @@ def compute_similarity(
         user_phases=user_phases,
         pro_phases=pro_phases,
         phase_scores=phase_scores,
+        comparison_mode=comparison_mode,
+    )
+    # 문장(feedback)과 별개로, 구조화된 구간 지표를 함께 내보낸다.
+    phase_metrics = build_phase_metrics(
+        user_pose.table,
+        pro_pose.table,
+        user_phases,
+        pro_phases,
+        comparison_mode=comparison_mode,
     )
 
     return {
@@ -111,6 +122,7 @@ def compute_similarity(
         "phaseScores": phase_scores,
         "release": analysis_feedback["release"],
         "feedback": analysis_feedback["feedback"],
+        "phaseMetrics": phase_metrics,
         "phaseDetection": {
             "user": {
                 "representativeFrames": user_phases.representative_frames,
@@ -148,8 +160,9 @@ def _estimate_release_event(
     if video_path is None:
         return None
     # 공 픽셀 기반 릴리즈 "정밀화"는 고해상도 프레임을 랜덤 시킹하며 처리해 매우 비싸다(수십~백수십초).
-    # BALL_RELEASE_DETECTION=0 이면 건너뛰고 phase 기반 릴리즈로 폴백한다(타이밍 정밀도만 소폭 하락).
-    if os.getenv("BALL_RELEASE_DETECTION", "1").strip() == "0":
+    # 기본적으로 끄고 phase 기반 릴리즈로 폴백한다(타이밍 정밀도만 소폭 하락, 속도 大폭 개선).
+    # 정밀 릴리즈가 필요하면 BALL_RELEASE_DETECTION=1 로 켤 수 있다.
+    if os.getenv("BALL_RELEASE_DETECTION", "0").strip() != "1":
         return None
     try:
         return estimate_ball_release_event(

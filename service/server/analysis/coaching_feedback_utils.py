@@ -37,6 +37,25 @@ class AxisRule:
     metric_label: str
     positive_message: str
     negative_message: str
+    # 이 지표가 왜 중요한지(기계적 이유) — 정밀 피드백 문구에 함께 노출한다.
+    why: str = ""
+    # "힘 전달" 관점에서 더 유리한 방향. "positive"면 기준보다 클수록(diff>0),
+    # "negative"면 작을수록 유리. 최고의 1구 비교에서 "다르지만 더 나을 수 있다" 코멘트에 쓰인다.
+    # None이면 방향성 해석을 하지 않는다(차이는 단순 '다름'으로만 본다).
+    favorable_direction: str | None = None
+
+
+def is_favorable(rule: AxisRule, diff: float) -> bool:
+    """이 차이가 '힘 전달' 관점에서 더 유리한 방향인지.
+
+    AxisRule의 성질이므로 규칙 옆에 둔다. 문장 생성과 지표 산출이 각자
+    판정을 들고 있으면 언젠가 서로 다른 답을 내게 된다.
+    """
+    if rule.favorable_direction == "positive":
+        return diff > 0
+    if rule.favorable_direction == "negative":
+        return diff < 0
+    return False
 
 
 @dataclass(frozen=True)
@@ -135,6 +154,15 @@ def phase_frame(phases: Any, phase: str, percent: float) -> float | None:
     return start + ((end - start) * max(0.0, min(100.0, percent)) / 100.0)
 
 
+def magnitude_word(ratio: float) -> str:
+    """차이/임계값 비율(>=1)을 정성적 강도 표현으로 바꾼다."""
+    if ratio >= 1.8:
+        return "크게"
+    if ratio >= 1.3:
+        return "뚜렷이"
+    return "약간"
+
+
 def metric_value(point: PosePoint, axis: str) -> float:
     if axis == "y":
         return point.y
@@ -149,6 +177,7 @@ def joint_name(table: pd.DataFrame, role: str) -> str:
     throwing_side = side_value(table, "throwing_side", "right")
     stride_side = side_value(table, "stride_side", "left" if throwing_side == "right" else "right")
     names = {
+        "throwing_shoulder": f"{throwing_side}_shoulder",
         "throwing_wrist": f"{throwing_side}_wrist",
         "throwing_elbow": f"{throwing_side}_elbow",
         "stride_knee": f"{stride_side}_knee",
